@@ -1,0 +1,2 @@
+# loto
+Game loto VietNam
