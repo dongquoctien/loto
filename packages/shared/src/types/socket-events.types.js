@@ -1,0 +1,44 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ServerEvents = exports.ClientEvents = void 0;
+var ClientEvents;
+(function (ClientEvents) {
+    ClientEvents["AUTHENTICATE"] = "authenticate";
+    ClientEvents["ROOM_JOIN"] = "room:join";
+    ClientEvents["ROOM_LEAVE"] = "room:leave";
+    ClientEvents["SHEET_PURCHASE"] = "sheet:purchase";
+    ClientEvents["GAME_START"] = "game:start";
+    ClientEvents["GAME_CALL_NUMBER"] = "game:call-number";
+    ClientEvents["GAME_TOGGLE_AUTO_CALL"] = "game:toggle-auto-call";
+    ClientEvents["GAME_RESET"] = "game:reset";
+    ClientEvents["TICKET_MARK_CELL"] = "ticket:mark-cell";
+    ClientEvents["TICKET_UNMARK_CELL"] = "ticket:unmark-cell";
+    ClientEvents["KINH_CLAIM"] = "kinh:claim";
+    ClientEvents["KINH_APPROVE"] = "kinh:approve";
+    ClientEvents["KINH_REJECT"] = "kinh:reject";
+})(ClientEvents || (exports.ClientEvents = ClientEvents = {}));
+var ServerEvents;
+(function (ServerEvents) {
+    ServerEvents["AUTHENTICATED"] = "authenticated";
+    ServerEvents["ROOM_JOINED"] = "room:joined";
+    ServerEvents["ROOM_PLAYER_JOINED"] = "room:player-joined";
+    ServerEvents["ROOM_PLAYER_LEFT"] = "room:player-left";
+    ServerEvents["ROOM_UPDATED"] = "room:updated";
+    ServerEvents["SHEET_PURCHASED"] = "sheet:purchased";
+    ServerEvents["SHEET_TAKEN"] = "sheet:taken";
+    ServerEvents["SHEET_PURCHASE_FAILED"] = "sheet:purchase-failed";
+    ServerEvents["GAME_STARTED"] = "game:started";
+    ServerEvents["GAME_NUMBER_CALLED"] = "game:number-called";
+    ServerEvents["GAME_PAUSED"] = "game:paused";
+    ServerEvents["GAME_RESUMED"] = "game:resumed";
+    ServerEvents["GAME_ENDED"] = "game:ended";
+    ServerEvents["KINH_CLAIMED"] = "kinh:claimed";
+    ServerEvents["KINH_VERIFY_REQUEST"] = "kinh:verify-request";
+    ServerEvents["KINH_WINNER_ANNOUNCEMENT"] = "kinh:winner-announcement";
+    ServerEvents["KINH_YOU_WON"] = "kinh:you-won";
+    ServerEvents["KINH_REJECTED_YOU"] = "kinh:rejected-you";
+    ServerEvents["KINH_REJECTED"] = "kinh:rejected";
+    ServerEvents["PAYMENT_REQUIRED"] = "payment:required";
+    ServerEvents["ERROR"] = "error";
+})(ServerEvents || (exports.ServerEvents = ServerEvents = {}));
+//# sourceMappingURL=socket-events.types.js.map
