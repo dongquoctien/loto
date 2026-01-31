@@ -87,6 +87,7 @@ networks:
   # External network shared with ChatLingua nginx
   chatlingua_default:
     external: true
+    name: chatlingua_chatlingua-network
 
 volumes:
   mysql_data:
