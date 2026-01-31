@@ -14,7 +14,7 @@
     "dev:backend": "cd apps/backend && npm run start:dev",
     "dev:frontend": "cd apps/frontend && npm start",
     "start:backend": "cd apps/backend && npm run start:prod",
-    "start:frontend": "cd apps/frontend && npm run serve:ssr:frontend",
+    "start:frontend": "cd apps/frontend && npm start",
     "seed": "cd apps/backend && npx ts-node src/database/seeds/ticket-seed.ts"
   },
   "engines": {
