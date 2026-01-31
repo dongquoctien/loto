@@ -14,7 +14,7 @@
     "dev:backend": "cd apps/backend && npm run start:dev",
     "dev:frontend": "cd apps/frontend && npm start",
     "start:backend": "cd apps/backend && npm run start:prod",
-    "start:frontend": "cd apps/frontend && npm start",
+    "start:frontend": "echo 'Frontend is static files served by nginx. No start command needed. Use: npm run build:frontend'",
     "seed": "cd apps/backend && npx ts-node src/database/seeds/ticket-seed.ts"
   },
   "engines": {
