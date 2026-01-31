@@ -42,10 +42,10 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DB_HOST: mysql
+      DB_HOST: loto-mysql
       DB_PORT: 3306
-      DB_USERNAME: root
-      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      DB_USERNAME: loto_user
+      DB_PASSWORD: ${MYSQL_PASSWORD}
       DB_DATABASE: loto_db
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: 7d
