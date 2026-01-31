@@ -32,6 +32,9 @@ export class UserEntity {
   @Column({ name: 'qr_code_url', length: 500, nullable: true })
   qrCodeUrl: string;
 
+  @Column({ name: 'win_count', default: 0 })
+  winCount: number;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

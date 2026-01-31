@@ -1,7 +1,7 @@
 import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../core/services/auth.service';
 import { ProfileComponent } from '../profile/profile.component';
@@ -30,7 +30,11 @@ interface Room {
         <div class="user-info">
           <a class="username-link" href="javascript:void(0)" (click)="showProfile = true">
             <span class="avatar-wrapper">
-              <img [src]="user()?.avatarUrl" alt="Avatar" class="avatar" />
+              @if (user()?.avatarUrl) {
+                <img [src]="user()?.avatarUrl" alt="Avatar" class="avatar" />
+              } @else {
+                <span class="avatar avatar-placeholder">{{ user()?.displayName?.charAt(0)?.toUpperCase() || '?' }}</span>
+              }
               <span class="status-dot"></span>
             </span>
             <span class="display-name">{{ user()?.displayName }}</span>
@@ -117,7 +121,7 @@ interface Room {
       </div>
 
       @if (showProfile) {
-        <app-profile (closed)="showProfile = false"></app-profile>
+        <app-profile [isNewUser]="isNewUser" (closed)="onProfileClosed()"></app-profile>
       }
     </div>
   `,
@@ -134,7 +138,8 @@ interface Room {
     .username-link { color: white; text-decoration: none; font-weight: 600; cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: background 0.2s; display: flex; align-items: center; gap: 8px; }
     .username-link:hover { background: rgba(255,255,255,0.2); }
     .avatar-wrapper { position: relative; display: inline-block; flex-shrink: 0; }
-    .avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; display: block; border: 2px solid rgba(255,255,255,0.4); }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; display: block; border: 2px solid rgba(255,255,255,0.4); box-sizing: border-box; }
+    .avatar-placeholder { background: rgba(255,255,255,0.25); color: white; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
     .status-dot { position: absolute; bottom: 0; right: 0; width: 10px; height: 10px; background: #31A24C; border: 2px solid #1877F2; border-radius: 50%; }
     .user-info button { background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: background 0.2s; }
     .user-info button:hover { background: rgba(255,255,255,0.3); }
@@ -171,6 +176,7 @@ export class LobbyComponent implements OnInit {
   private authService = inject(AuthService);
   private http = inject(HttpClient);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
 
   user = this.authService.user;
   rooms = signal<Room[]>([]);
@@ -183,9 +189,16 @@ export class LobbyComponent implements OnInit {
   winVertical = false;
   winDiagonal = false;
   showProfile = false;
+  isNewUser = false;
 
   ngOnInit() {
     this.loadRooms();
+
+    if (this.route.snapshot.queryParams['newUser'] === 'true') {
+      this.isNewUser = true;
+      this.showProfile = true;
+      this.router.navigate([], { queryParams: {}, replaceUrl: true });
+    }
   }
 
   loadRooms() {
@@ -228,6 +241,11 @@ export class LobbyComponent implements OnInit {
   formatPrice() {
     if (this.pricePerSheet < 1000) this.pricePerSheet = 1000;
     this.priceDisplay = this.pricePerSheet.toLocaleString('en-US');
+  }
+
+  onProfileClosed() {
+    this.showProfile = false;
+    this.isNewUser = false;
   }
 
   logout() {

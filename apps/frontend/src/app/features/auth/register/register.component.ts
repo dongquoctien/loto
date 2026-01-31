@@ -100,7 +100,7 @@ export class RegisterComponent {
       .register(this.username, this.email, this.password, this.displayName || undefined)
       .subscribe({
         next: () => {
-          this.router.navigate(['/lobby']);
+          this.router.navigate(['/lobby'], { queryParams: { newUser: true } });
         },
         error: (err) => {
           this.error.set(err.error?.message || 'Đăng ký thất bại');

@@ -36,7 +36,7 @@ export class AudioService {
           this.playSequence(ctx, [523, 659, 784, 1047], 0.15);
           break;
         case 'winner':
-          this.playSequence(ctx, [523, 659, 784, 1047, 784, 1047], 0.2);
+          this.playWinnerFanfare(ctx);
           break;
         case 'mark':
           this.playTone(ctx, 600, 0.05, 'sine');
@@ -83,5 +83,83 @@ export class AudioService {
       osc.start(startTime);
       osc.stop(startTime + noteDuration);
     });
+  }
+
+  /**
+   * Grand celebratory fanfare with layered harmonics, trumpet-style melody,
+   * and a shimmering finale.
+   */
+  private playWinnerFanfare(ctx: AudioContext) {
+    const now = ctx.currentTime;
+
+    // --- Layer 1: Triumphant brass-style melody (C major fanfare) ---
+    const melody: { freq: number; start: number; dur: number; vol: number }[] = [
+      // Opening flourish: C5 E5 G5
+      { freq: 523, start: 0, dur: 0.18, vol: 0.18 },
+      { freq: 659, start: 0.15, dur: 0.18, vol: 0.18 },
+      { freq: 784, start: 0.30, dur: 0.22, vol: 0.20 },
+      // Held high C
+      { freq: 1047, start: 0.50, dur: 0.45, vol: 0.22 },
+      // Descending grace: G5 E5
+      { freq: 784, start: 0.90, dur: 0.12, vol: 0.14 },
+      { freq: 659, start: 1.00, dur: 0.12, vol: 0.14 },
+      // Final triumphant climb: G5 -> C6
+      { freq: 784, start: 1.10, dur: 0.20, vol: 0.18 },
+      { freq: 988, start: 1.28, dur: 0.20, vol: 0.20 },
+      { freq: 1047, start: 1.46, dur: 0.55, vol: 0.24 },
+    ];
+
+    for (const note of melody) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = note.freq;
+      const t = now + note.start;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(note.vol, t + 0.02);
+      gain.gain.setValueAtTime(note.vol, t + note.dur * 0.6);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + note.dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + note.dur + 0.01);
+    }
+
+    // --- Layer 2: Warm bass foundation (octave below, sine) ---
+    const bassNotes = [
+      { freq: 262, start: 0, dur: 0.50 },
+      { freq: 262, start: 0.50, dur: 0.50 },
+      { freq: 330, start: 1.10, dur: 0.30 },
+      { freq: 262, start: 1.46, dur: 0.55 },
+    ];
+    for (const note of bassNotes) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = note.freq;
+      const t = now + note.start;
+      gain.gain.setValueAtTime(0.10, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + note.dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + note.dur + 0.01);
+    }
+
+    // --- Layer 3: Shimmering sparkle effect (high-frequency twinkles) ---
+    const sparkles = [0.05, 0.25, 0.55, 0.80, 1.15, 1.50, 1.70];
+    for (const t of sparkles) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 2400 + Math.random() * 1600;
+      const start = now + t;
+      gain.gain.setValueAtTime(0.06, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.08);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.1);
+    }
   }
 }

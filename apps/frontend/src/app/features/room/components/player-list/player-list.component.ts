@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 interface Player {
@@ -6,6 +6,7 @@ interface Player {
   displayName: string;
   avatarUrl: string | null;
   isOnline: boolean;
+  winCount: number;
 }
 
 @Component({
@@ -15,9 +16,42 @@ interface Player {
   template: `
     <aside class="player-sidebar">
       <h3>Người Chơi ({{ players.length }})</h3>
-      @for (player of players; track player.userId) {
-        <div class="player-item" [class.offline]="!player.isOnline" [class.is-me]="player.userId === currentUserId">
-          <div class="player-avatar" [class.me-avatar]="player.userId === currentUserId">
+
+      <!-- Current user (me) at top -->
+      @if (mePlayer) {
+        <div class="player-item is-me" [class.offline]="!mePlayer.isOnline">
+          <div class="player-avatar me-avatar">
+            @if (mePlayer.avatarUrl) {
+              <img [src]="mePlayer.avatarUrl" [alt]="mePlayer.displayName" />
+            } @else {
+              <span>{{ mePlayer.displayName?.charAt(0) || '?' }}</span>
+            }
+            <span class="status-dot" [class.online]="mePlayer.isOnline"></span>
+          </div>
+          <div class="player-info">
+            <span class="player-name">{{ mePlayer.displayName }} (Bạn) @if (mePlayer.winCount > 0) { <span class="win-count-badge">🏆 {{ mePlayer.winCount }}</span> }</span>
+            <div class="player-badges">
+              @if (mePlayer.userId === ownerId) {
+                <span class="owner-badge">Chủ phòng</span>
+              }
+              @if (penalizedPlayers.has(mePlayer.userId)) {
+                <span class="penalty-badge">Phạt</span>
+              }
+              @if (kinhClaimantId === mePlayer.userId) {
+                <span class="kinh-claim-badge">KINH - Đang Soát vé</span>
+              } @else if (nearWinPlayers.has(mePlayer.userId)) {
+                <span class="near-win-badge">Đang đợi</span>
+              }
+            </div>
+          </div>
+        </div>
+        <div class="player-separator"></div>
+      }
+
+      <!-- Other players -->
+      @for (player of otherPlayers; track player.userId) {
+        <div class="player-item" [class.offline]="!player.isOnline">
+          <div class="player-avatar">
             @if (player.avatarUrl) {
               <img [src]="player.avatarUrl" [alt]="player.displayName" />
             } @else {
@@ -26,13 +60,23 @@ interface Player {
             <span class="status-dot" [class.online]="player.isOnline"></span>
           </div>
           <div class="player-info">
-            <span class="player-name">{{ player.displayName }}</span>
-            @if (player.userId === ownerId) {
-              <span class="owner-badge">Chủ phòng</span>
-            }
-            @if (penalizedPlayers.has(player.userId)) {
-              <span class="penalty-badge">Phạt</span>
-            }
+            <span class="player-name">{{ player.displayName }} 
+              @if (player.winCount > 0) { <span class="win-count-badge">🏆 {{ player.winCount }}</span> }
+            </span>
+            <div class="player-badges">
+            
+              @if (player.userId === ownerId) {
+                <span class="owner-badge">Chủ phòng</span>
+              }
+              @if (penalizedPlayers.has(player.userId)) {
+                <span class="penalty-badge">Phạt</span>
+              }
+              @if (kinhClaimantId === player.userId) {
+                <span class="kinh-claim-badge">KINH - Đang soát vé</span>
+              } @else if (nearWinPlayers.has(player.userId)) {
+                <span class="near-win-badge">Đang đợi</span>
+              }
+            </div>
           </div>
         </div>
       }
@@ -100,6 +144,7 @@ interface Player {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      line-height: 17px;
     }
     .owner-badge {
       font-size: 10px;
@@ -111,6 +156,41 @@ interface Player {
       color: #FA383E;
       font-weight: 600;
     }
+    .near-win-badge {
+      font-size: 10px;
+      color: #FFD700;
+      font-weight: 600;
+      animation: blink 1s ease-in-out infinite;
+    }
+    .kinh-claim-badge {
+      font-size: 10px;
+      color: #FF6B35;
+      font-weight: 600;
+      animation: blink 1s ease-in-out infinite;
+    }
+    .player-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+    }
+    .win-count-badge {
+      font-size: 10px;
+      color: #FFD700;
+      font-weight: 700;
+      background: rgba(255, 215, 0, 0.12);
+      padding: 1px 6px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 215, 0, 0.25);
+    }
+    .player-separator {
+      border-bottom: 1px solid #3A3B3C;
+      margin: 6px 0;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.2; }
+    }
   `],
 })
 export class PlayerListComponent {
@@ -118,4 +198,14 @@ export class PlayerListComponent {
   @Input() ownerId: number | null = null;
   @Input() currentUserId: number | null = null;
   @Input() penalizedPlayers: Set<number> = new Set();
+  @Input() nearWinPlayers: Set<number> = new Set();
+  @Input() kinhClaimantId: number | null = null;
+
+  get mePlayer(): Player | undefined {
+    return this.players.find(p => p.userId === this.currentUserId);
+  }
+
+  get otherPlayers(): Player[] {
+    return this.players.filter(p => p.userId !== this.currentUserId);
+  }
 }

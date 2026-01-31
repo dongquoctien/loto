@@ -1,24 +1,37 @@
-import { Component, signal, inject, Output, EventEmitter, OnInit } from '@angular/core';
+import { Component, signal, inject, Output, EventEmitter, OnInit, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../core/services/auth.service';
 import { environment } from '../../../environments/environment';
+import { ImageCropperComponent } from './image-cropper.component';
 
 @Component({
   selector: 'app-profile',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ImageCropperComponent],
   template: `
-    <div class="overlay" (click)="closed.emit()">
+    <div class="overlay" (click)="isNewUser ? null : closed.emit()">
       <div class="profile-card" (click)="$event.stopPropagation()">
         <div class="modal-header">
-          <h2>Hồ Sơ Cá Nhân</h2>
-          <button class="close-btn" (click)="closed.emit()">&times;</button>
+          <h2>{{ isNewUser ? 'Chào Mừng Bạn!' : 'Hồ Sơ Cá Nhân' }}</h2>
+          @if (!isNewUser) {
+            <button class="close-btn" (click)="closed.emit()">&times;</button>
+          }
         </div>
+
+        @if (isNewUser) {
+          <div class="welcome-message">
+            Hãy cập nhật hồ sơ của bạn để mọi người nhận ra bạn trong phòng chơi.
+            Đừng quên tải lên mã QR chuyển khoản để nhận thưởng nhé!
+          </div>
+        }
 
         @if (success()) {
           <div class="success-message">Cập nhật thành công!</div>
+        }
+        @if (uploadError()) {
+          <div class="error-message">{{ uploadError() }}</div>
         }
 
         <div class="avatar-section">
@@ -29,7 +42,7 @@ import { environment } from '../../../environments/environment';
           }
           <label class="upload-btn">
             Đổi ảnh đại diện
-            <input type="file" accept="image/*" (change)="onAvatarUpload($event)" hidden />
+            <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" (change)="onAvatarUpload($event)" hidden />
           </label>
         </div>
 
@@ -46,16 +59,33 @@ import { environment } from '../../../environments/environment';
             }
             <label class="upload-btn">
               {{ user()?.qrCodeUrl ? 'Đổi mã QR' : 'Tải lên mã QR' }}
-              <input type="file" accept="image/*" (change)="onQrUpload($event)" hidden />
+              <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" (change)="onQrUpload($event)" hidden />
             </label>
           </div>
 
           <button type="submit" [disabled]="saving()">
-            {{ saving() ? 'Đang lưu...' : 'Lưu Thay Đổi' }}
+            {{ saving() ? 'Đang lưu...' : (isNewUser ? 'Hoàn Tất Hồ Sơ' : 'Lưu Thay Đổi') }}
           </button>
         </form>
+
+        @if (isNewUser) {
+          <div class="skip-section">
+            <button class="skip-btn" (click)="closed.emit()">Bỏ qua, để sau</button>
+          </div>
+        }
       </div>
     </div>
+
+    @if (cropperFile()) {
+      <app-image-cropper
+        [imageFile]="cropperFile()!"
+        [shape]="cropperShape()"
+        [title]="cropperShape() === 'circle' ? 'Cắt Ảnh Đại Diện' : 'Cắt Mã QR'"
+        [outputSize]="cropperShape() === 'circle' ? 400 : 600"
+        (cropped)="onCropped($event)"
+        (cancel)="closeCropper()"
+      />
+    }
   `,
   styles: [`
     .overlay {
@@ -167,33 +197,91 @@ import { environment } from '../../../environments/environment';
       background: #E7F3EF; color: #00A400; padding: 12px; margin: 16px 24px 0;
       border-radius: 6px; font-size: 14px;
     }
+    .error-message {
+      background: #FEE7E7; color: #E5343A; padding: 12px; margin: 16px 24px 0;
+      border-radius: 6px; font-size: 14px;
+    }
+    .welcome-message {
+      background: #E7F0FF; color: #1877F2; padding: 12px 24px;
+      font-size: 14px; line-height: 1.5; border-bottom: 1px solid #DDDFE2;
+    }
+    .skip-section {
+      padding: 0 24px 16px; text-align: center;
+    }
+    .skip-btn {
+      background: none; border: none; color: #65676B; font-size: 14px;
+      cursor: pointer; padding: 8px 16px; border-radius: 6px; transition: background 0.2s;
+    }
+    .skip-btn:hover { background: #F0F2F5; color: #1C1E21; }
   `],
 })
 export class ProfileComponent implements OnInit {
   private authService = inject(AuthService);
   private http = inject(HttpClient);
 
+  @Input() isNewUser = false;
   @Output() closed = new EventEmitter<void>();
+
+  private readonly allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+  private readonly maxFileSize = 5 * 1024 * 1024; // 5MB
 
   user = this.authService.user;
   displayName = '';
   saving = signal(false);
   success = signal(false);
+  uploadError = signal<string | null>(null);
+
+  // Cropper state
+  cropperFile = signal<File | null>(null);
+  cropperShape = signal<'circle' | 'square'>('circle');
+  private cropperField = '';
 
   ngOnInit() {
     this.displayName = this.user()?.displayName || '';
   }
 
   onAvatarUpload(event: Event) {
-    const file = (event.target as HTMLInputElement).files?.[0];
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ''; // reset so same file can be re-selected
     if (!file) return;
-    this.uploadFile(file, 'avatarUrl');
+    if (!this.validateImage(file)) return;
+    this.cropperField = 'avatarUrl';
+    this.cropperShape.set('circle');
+    this.cropperFile.set(file);
   }
 
   onQrUpload(event: Event) {
-    const file = (event.target as HTMLInputElement).files?.[0];
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
     if (!file) return;
-    this.uploadFile(file, 'qrCodeUrl');
+    if (!this.validateImage(file)) return;
+    this.cropperField = 'qrCodeUrl';
+    this.cropperShape.set('square');
+    this.cropperFile.set(file);
+  }
+
+  onCropped(croppedFile: File) {
+    this.closeCropper();
+    this.uploadFile(croppedFile, this.cropperField);
+  }
+
+  closeCropper() {
+    this.cropperFile.set(null);
+  }
+
+  private validateImage(file: File): boolean {
+    this.uploadError.set(null);
+    if (!this.allowedTypes.includes(file.type)) {
+      this.uploadError.set('Chỉ chấp nhận file ảnh (JPG, PNG, GIF, WebP)');
+      return false;
+    }
+    if (file.size > this.maxFileSize) {
+      this.uploadError.set('Ảnh không được vượt quá 5MB');
+      return false;
+    }
+    return true;
   }
 
   onSave() {
@@ -207,7 +295,11 @@ export class ProfileComponent implements OnInit {
           this.authService.updateUser(user);
           this.saving.set(false);
           this.success.set(true);
-          setTimeout(() => this.success.set(false), 3000);
+          if (this.isNewUser) {
+            setTimeout(() => this.closed.emit(), 1500);
+          } else {
+            setTimeout(() => this.success.set(false), 3000);
+          }
         },
         error: () => this.saving.set(false),
       });

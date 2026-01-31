@@ -24,8 +24,12 @@ import { UploadController } from './upload.controller';
           fileSize: configService.get<number>('MAX_FILE_SIZE', 5 * 1024 * 1024),
         },
         fileFilter: (_req, file, cb) => {
-          const allowed = /\.(jpg|jpeg|png|gif|webp)$/i;
-          if (allowed.test(extname(file.originalname))) {
+          const allowedExt = /\.(jpg|jpeg|png|gif|webp)$/i;
+          const allowedMime = /^image\/(jpeg|png|gif|webp)$/i;
+          if (
+            allowedExt.test(extname(file.originalname)) &&
+            allowedMime.test(file.mimetype)
+          ) {
             cb(null, true);
           } else {
             cb(new Error('Only image files are allowed'), false);

@@ -186,6 +186,99 @@ export function validateWinClaim(
 }
 
 /**
+ * Check if a ticket is near winning (missing exactly 1 number) for any enabled win type.
+ * Returns the missing numbers for each near-win line found.
+ */
+export function checkNearWins(
+  ticket: TicketData,
+  calledNumbers: Set<number>,
+  enabledWinTypes: { horizontal: boolean; vertical: boolean; diagonal: boolean },
+): { winType: WinType; lineDetails: LineDetails; missingNumber: number }[] {
+  const nearWins: { winType: WinType; lineDetails: LineDetails; missingNumber: number }[] = [];
+
+  if (enabledWinTypes.horizontal) {
+    for (let r = 0; r < 3; r++) {
+      const row = ticket.rows[r];
+      const numbersInRow = row.filter(cell => cell !== null) as number[];
+      if (numbersInRow.length === 0) continue;
+
+      const uncalled = numbersInRow.filter(n => !calledNumbers.has(n));
+      if (uncalled.length === 1) {
+        nearWins.push({
+          winType: 'horizontal',
+          lineDetails: { rowIndex: r },
+          missingNumber: uncalled[0],
+        });
+      }
+    }
+  }
+
+  if (enabledWinTypes.vertical) {
+    for (let c = 0; c < 9; c++) {
+      const numbersInCol: number[] = [];
+      for (let r = 0; r < 3; r++) {
+        const val = ticket.rows[r][c];
+        if (val !== null) numbersInCol.push(val);
+      }
+      if (numbersInCol.length === 0) continue;
+
+      const uncalled = numbersInCol.filter(n => !calledNumbers.has(n));
+      if (uncalled.length === 1) {
+        nearWins.push({
+          winType: 'vertical',
+          lineDetails: { colIndex: c },
+          missingNumber: uncalled[0],
+        });
+      }
+    }
+  }
+
+  if (enabledWinTypes.diagonal) {
+    // Main diagonals
+    for (let startCol = 0; startCol <= 6; startCol++) {
+      const cells = [
+        ticket.rows[0][startCol],
+        ticket.rows[1][startCol + 1],
+        ticket.rows[2][startCol + 2],
+      ];
+      if (cells.every(c => c !== null)) {
+        const numbers = cells as number[];
+        const uncalled = numbers.filter(n => !calledNumbers.has(n));
+        if (uncalled.length === 1) {
+          nearWins.push({
+            winType: 'diagonal',
+            lineDetails: { direction: 'main', startCol },
+            missingNumber: uncalled[0],
+          });
+        }
+      }
+    }
+
+    // Anti diagonals
+    for (let startCol = 2; startCol <= 8; startCol++) {
+      const cells = [
+        ticket.rows[0][startCol],
+        ticket.rows[1][startCol - 1],
+        ticket.rows[2][startCol - 2],
+      ];
+      if (cells.every(c => c !== null)) {
+        const numbers = cells as number[];
+        const uncalled = numbers.filter(n => !calledNumbers.has(n));
+        if (uncalled.length === 1) {
+          nearWins.push({
+            winType: 'diagonal',
+            lineDetails: { direction: 'anti', startCol },
+            missingNumber: uncalled[0],
+          });
+        }
+      }
+    }
+  }
+
+  return nearWins;
+}
+
+/**
  * Check all possible wins for a ticket given the enabled win types.
  */
 export function checkAllWins(

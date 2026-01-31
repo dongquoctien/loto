@@ -29,6 +29,10 @@ export class UserService {
     return this.userRepository.save(user);
   }
 
+  async incrementWinCount(userId: number): Promise<void> {
+    await this.userRepository.increment({ id: userId }, 'winCount', 1);
+  }
+
   sanitize(user: UserEntity) {
     return {
       id: user.id,
@@ -37,6 +41,7 @@ export class UserService {
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
       qrCodeUrl: user.qrCodeUrl,
+      winCount: user.winCount ?? 0,
     };
   }
 }

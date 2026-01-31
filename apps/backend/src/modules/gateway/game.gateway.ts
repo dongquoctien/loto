@@ -13,7 +13,7 @@ import { GameService } from '../game/game.service';
 import { RoomService } from '../room/room.service';
 import { TicketService } from '../ticket/ticket.service';
 import { UserService } from '../user/user.service';
-import { WinType, LineDetails } from '@loto/shared';
+import { WinType, LineDetails, checkNearWins, TicketData } from '@loto/shared';
 
 interface AuthenticatedSocket extends Socket {
   userId?: number;
@@ -151,6 +151,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
           displayName: p.user?.displayName || p.user?.username,
           avatarUrl: p.user?.avatarUrl,
           isOnline: p.isOnline,
+          winCount: p.user?.winCount ?? 0,
         })),
         sheets,
         session: sessionData,
@@ -162,6 +163,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         userId: client.userId,
         displayName: user.displayName || user.username,
         avatarUrl: user.avatarUrl,
+        winCount: user.winCount ?? 0,
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to join room';
@@ -453,6 +455,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (!claim) return;
 
       const result = await this.gameService.approveKinh(data.sessionId);
+      await this.userService.incrementWinCount(claim.userId);
       const winner = await this.userService.findById(claim.userId);
       const payments = this.gameService.calculatePayments(
         data.sessionId,
@@ -460,7 +463,35 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         claim.userId,
       );
 
-      // Send winner announcement to everyone EXCEPT the winner
+      // Build payment report with player details for winner popup
+      const paymentReport: {
+        userId: number;
+        displayName: string;
+        avatarUrl: string | null;
+        sheetCount: number;
+        amount: number;
+      }[] = [];
+
+      // Count sheets per user from game state (reuse `state` from above)
+      const userSheetCounts = new Map<number, number>();
+      for (const [, userId] of state.purchasedSheets) {
+        userSheetCounts.set(userId, (userSheetCounts.get(userId) || 0) + 1);
+      }
+
+      for (const payment of payments) {
+        const paymentUser = await this.userService.findById(payment.userId);
+        paymentReport.push({
+          userId: payment.userId,
+          displayName: paymentUser.displayName || paymentUser.username,
+          avatarUrl: paymentUser.avatarUrl,
+          sheetCount: userSheetCounts.get(payment.userId) || 0,
+          amount: payment.amount,
+        });
+      }
+
+      const totalWinAmount = paymentReport.reduce((sum, p) => sum + p.amount, 0);
+
+      // Send winner announcement to everyone
       const winnerSocketId = this.userSockets.get(claim.userId);
 
       this.server.to(`room:${client.currentRoomId}`).emit('kinh:winner-announcement', {
@@ -470,6 +501,8 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         qrCodeUrl: winner.qrCodeUrl,
         winType: result.winType,
         ticketId: result.winningTicketId,
+        paymentReport,
+        totalWinAmount,
       });
 
       // Send personalized "you won" to winner
@@ -636,6 +669,74 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       calledNumbers: state.calledNumbers,
       remaining: state.remainingNumbers.length,
     });
+
+    // Check near-wins for all players after each number called
+    this.checkAndBroadcastNearWins(sessionId, roomId).catch((err) => {
+      // Non-critical: don't break the game flow
+    });
+  }
+
+  private async checkAndBroadcastNearWins(sessionId: number, roomId: number): Promise<void> {
+    const state = this.gameService.getState(sessionId);
+    const calledSet = new Set(state.calledNumbers);
+
+    const room = await this.roomService.findById(roomId);
+    const enabledWinTypes = {
+      horizontal: room.winHorizontal,
+      vertical: room.winVertical,
+      diagonal: room.winDiagonal,
+    };
+
+    // Collect userId -> sheetIds from purchased sheets
+    const userSheets = new Map<number, number[]>();
+    for (const [sheetId, userId] of state.purchasedSheets) {
+      if (!userSheets.has(userId)) userSheets.set(userId, []);
+      userSheets.get(userId)!.push(sheetId);
+    }
+
+    for (const [userId, sheetIds] of userSheets) {
+      // Skip penalized players
+      if (state.penalizedPlayers.has(userId)) continue;
+
+      let foundNearWin = false;
+      for (const sheetId of sheetIds) {
+        if (foundNearWin) break;
+
+        const sheet = await this.ticketService.getSheetById(sheetId);
+        if (!sheet) continue;
+
+        const tickets = [sheet.ticket1, sheet.ticket2, sheet.ticket3].filter(Boolean);
+        for (const ticket of tickets) {
+          const ticketData: TicketData = {
+            id: ticket.id,
+            ticketNumber: ticket.ticketNumber,
+            colorGroup: ticket.colorGroup as TicketData['colorGroup'],
+            rows: [ticket.row1, ticket.row2, ticket.row3] as TicketData['rows'],
+          };
+
+          // Build the intersection of called ∩ marked for this user's ticket
+          const markedNumbers = await this.gameService.getMarkedNumbersForTicket(sessionId, userId, ticket.id);
+          const effectiveSet = new Set<number>();
+          for (const num of calledSet) {
+            if (markedNumbers.has(num)) {
+              effectiveSet.add(num);
+            }
+          }
+
+          const nearWins = checkNearWins(ticketData, effectiveSet, enabledWinTypes);
+          if (nearWins.length > 0) {
+            const user = await this.userService.findById(userId);
+            this.server.to(`room:${roomId}`).emit('player:near-win', {
+              userId,
+              displayName: user.displayName || user.username,
+              avatarUrl: user.avatarUrl,
+            });
+            foundNearWin = true;
+            break;
+          }
+        }
+      }
+    }
   }
 
   private startAutoCall(sessionId: number, roomId: number, intervalSeconds: number): void {

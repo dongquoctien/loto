@@ -368,6 +368,21 @@ export class GameService {
     });
   }
 
+  /**
+   * Get the set of number values that a user has marked for a specific ticket in a session.
+   */
+  async getMarkedNumbersForTicket(
+    sessionId: number,
+    userId: number,
+    ticketId: number,
+  ): Promise<Set<number>> {
+    const marks = await this.markedCellRepository.find({
+      where: { sessionId, userId, ticketId },
+      select: ['numberValue'],
+    });
+    return new Set(marks.map((m) => m.numberValue));
+  }
+
   private generateShuffledNumbers(): number[] {
     const numbers: number[] = [];
     for (let i = 1; i <= 90; i++) {

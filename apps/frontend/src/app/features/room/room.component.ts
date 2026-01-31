@@ -1,17 +1,18 @@
-import { Component, OnInit, OnDestroy, signal, computed, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, computed, inject, HostListener, afterNextRender } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { SocketService } from '../../core/services/socket.service';
 import { AuthService } from '../../core/services/auth.service';
 import { AudioService } from '../../core/services/audio.service';
+import { checkAllWins, TicketData as SharedTicketData } from '@loto/shared';
 
 import { TicketDisplayComponent } from './components/ticket-display/ticket-display.component';
 import { SheetSelectorComponent } from './components/sheet-selector/sheet-selector.component';
 import { CalledNumbersHeaderComponent } from './components/called-numbers-header/called-numbers-header.component';
 import { GameControlsComponent } from './components/game-controls/game-controls.component';
 import { KinhButtonComponent } from './components/kinh-button/kinh-button.component';
-import { WinnerOverlayComponent } from './components/winner-overlay/winner-overlay.component';
+import { WinnerOverlayComponent, PaymentReportItem } from './components/winner-overlay/winner-overlay.component';
 import { PlayerListComponent } from './components/player-list/player-list.component';
 
 interface RoomData {
@@ -33,6 +34,7 @@ interface Player {
   displayName: string;
   avatarUrl: string | null;
   isOnline: boolean;
+  winCount: number;
 }
 
 interface TicketData {
@@ -78,6 +80,11 @@ interface SheetInfo {
             <span class="price-badge">{{ room()?.pricePerSheet | number:'1.0-0' }}đ/tờ</span>
           </div>
           <div class="room-actions">
+            @if (myTickets().length > 0 && gameStatus() !== 'preparing' && gameStatus() !== 'finished') {
+              <button class="hands-free-toggle" [class.active]="handsFreeMode()" (click)="toggleHandsFree()">
+                {{ handsFreeMode() ? '🤖 Rảnh Tay' : '✋ Thủ Công' }}
+              </button>
+            }
             <button class="sound-toggle" (click)="toggleSound()">
               {{ soundEnabled() ? '🔊' : '🔇' }}
             </button>
@@ -113,8 +120,22 @@ interface SheetInfo {
             <!-- My Tickets -->
             @if (myTickets().length > 0) {
               <div class="my-tickets">
-                <h3>Vé Của Bạn</h3>
-                <div class="tickets-grid">
+                <div class="tickets-header">
+                  <h3>Vé Của Bạn</h3>
+                  @if (maxColumns() > 1) {
+                    <div class="columns-selector">
+                      @for (n of columnOptions(); track n) {
+                        <button
+                          class="col-btn"
+                          [class.active]="ticketColumns() === n"
+                          (click)="ticketColumns.set(n)">
+                          {{ n }}
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+                <div class="tickets-grid" [style.grid-template-columns]="'repeat(' + ticketColumns() + ', 1fr)'">
                   @for (ticket of myTickets(); track ticket.id) {
                     <app-ticket-display
                       [ticket]="ticket"
@@ -200,8 +221,29 @@ interface SheetInfo {
             [players]="players()"
             [ownerId]="room()?.ownerId ?? null"
             [currentUserId]="currentUserId()"
-            [penalizedPlayers]="penalizedPlayersSet()">
+            [penalizedPlayers]="penalizedPlayersSet()"
+            [nearWinPlayers]="nearWinPlayers()"
+            [kinhClaimantId]="kinhClaimantUserId()">
           </app-player-list>
+        </div>
+      }
+
+      <!-- Near-Win Toast -->
+      @if (nearWinToast()) {
+        <div class="near-win-toast">
+          <div class="near-win-toast-content">
+            <span class="near-win-avatar">
+              @if (nearWinToast()?.avatarUrl) {
+                <img [src]="nearWinToast()?.avatarUrl" alt="" />
+              } @else {
+                <span class="near-win-avatar-letter">{{ nearWinToast()?.displayName?.charAt(0)?.toUpperCase() || '?' }}</span>
+              }
+            </span>
+            <div class="near-win-text">
+              <strong>{{ nearWinToast()?.displayName }}</strong>
+              <span>Đang đợi KINH!</span>
+            </div>
+          </div>
         </div>
       }
 
@@ -210,6 +252,9 @@ interface SheetInfo {
         <app-winner-overlay
           [winner]="winnerInfo()!"
           [paymentAmount]="paymentAmount()"
+          [isWinner]="isCurrentUserWinner()"
+          [paymentReport]="paymentReport()"
+          [totalWinAmount]="totalWinAmount()"
           (dismissed)="dismissWinner()">
         </app-winner-overlay>
       }
@@ -278,6 +323,23 @@ interface SheetInfo {
       gap: 8px;
       align-items: center;
     }
+    .hands-free-toggle {
+      background: #3A3B3C;
+      border: 1px solid #4E4F50;
+      border-radius: 6px;
+      padding: 4px 10px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: #B0B3B8;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+    .hands-free-toggle.active {
+      background: rgba(0, 164, 0, 0.2);
+      border-color: #00A400;
+      color: #00A400;
+    }
     .sound-toggle {
       background: none;
       border: 1px solid #3A3B3C;
@@ -308,14 +370,46 @@ interface SheetInfo {
       padding: 16px 20px;
       overflow-y: auto;
     }
-    .my-tickets h3 {
-      margin: 0 0 12px;
+    .tickets-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .tickets-header h3 {
+      margin: 0;
       font-size: 16px;
       color: #E4E6EB;
     }
+    .columns-selector {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .col-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      border: 1px solid #3A3B3C;
+      background: #242526;
+      color: #B0B3B8;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+    .col-btn:hover { background: #3A3B3C; }
+    .col-btn.active {
+      background: #1877F2;
+      border-color: #1877F2;
+      color: white;
+    }
     .tickets-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
       gap: 12px;
     }
     .penalty-notice {
@@ -356,15 +450,91 @@ interface SheetInfo {
     }
     .waiting-message p { font-size: 16px; }
 
+    .near-win-toast {
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      animation: toastSlideIn 0.3s ease-out, toastFadeOut 0.3s ease-in 1.7s forwards;
+    }
+    .near-win-toast-content {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: linear-gradient(135deg, #1877F2, #0D47A1);
+      padding: 12px 20px;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(24, 119, 242, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    .near-win-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      overflow: hidden;
+      flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .near-win-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .near-win-avatar-letter { color: white; font-size: 18px; font-weight: 700; }
+    .near-win-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      color: white;
+    }
+    .near-win-text strong { font-size: 14px; }
+    .near-win-text span { font-size: 12px; opacity: 0.9; }
+    @keyframes toastSlideIn {
+      from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+    @keyframes toastFadeOut {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+
     @media (max-width: 768px) {
+      .room-header {
+        padding: 8px 12px;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .room-title {
+        gap: 6px;
+        min-width: 0;
+        flex: 1;
+      }
+      .room-title h2 {
+        font-size: 15px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 140px;
+      }
+      .room-code { font-size: 10px; padding: 1px 6px; }
+      .price-badge { font-size: 10px; padding: 1px 6px; }
+      .room-actions { gap: 6px; flex-shrink: 0; }
+      .hands-free-toggle { padding: 3px 8px; font-size: 11px; }
+      .sound-toggle { padding: 3px 6px; font-size: 16px; }
+      .leave-btn { padding: 4px 10px; font-size: 12px; white-space: nowrap; }
+      .game-area { padding: 10px 12px; }
       .room-body { flex-direction: column; }
-      .tickets-grid { grid-template-columns: 1fr; }
+    
       :host ::ng-deep .player-sidebar {
         width: 100% !important;
         border-left: none !important;
         border-top: 1px solid #3A3B3C;
         max-height: 200px;
       }
+    }
+    @media (max-width: 500px) {
+      .tickets-grid { grid-template-columns: 1fr !important; }
+      .columns-selector { display: none; }
     }
   `],
 })
@@ -393,9 +563,15 @@ export class RoomComponent implements OnInit, OnDestroy {
   markedCells = signal<Set<string>>(new Set());
   winHighlightCells = signal<Set<string>>(new Set());
   soundEnabled = signal(true);
+  handsFreeMode = signal(false);
+
+  // Near-win (đang đợi) state
+  nearWinPlayers = signal<Set<number>>(new Set());
+  nearWinToast = signal<{ displayName: string; avatarUrl: string | null } | null>(null);
 
   // Kinh / Winner state
   kinhClaimant = signal<{ displayName: string; winType: string } | null>(null);
+  kinhClaimantUserId = signal<number | null>(null);
   verifyTicket = signal<TicketData | null>(null);
   verifyMarkedCells = signal<Set<string>>(new Set());
   verifyWinCells = signal<Set<string>>(new Set());
@@ -407,9 +583,20 @@ export class RoomComponent implements OnInit, OnDestroy {
     winType?: string;
   } | null>(null);
   paymentAmount = signal<number | null>(null);
+  isCurrentUserWinner = signal(false);
+  paymentReport = signal<PaymentReportItem[]>([]);
+  totalWinAmount = signal(0);
 
   // My purchased tickets
   myTickets = signal<TicketData[]>([]);
+
+  // Ticket grid columns
+  ticketColumns = signal(2);
+  maxColumns = signal(1);
+  columnOptions = computed(() => {
+    const max = this.maxColumns();
+    return Array.from({ length: max }, (_, i) => i + 1);
+  });
 
   currentUserId = computed(() => this.authService.user()?.id ?? null);
   isOwner = computed(() => {
@@ -417,6 +604,10 @@ export class RoomComponent implements OnInit, OnDestroy {
     const room = this.room();
     return user && room ? user.id === room.ownerId : false;
   });
+
+  constructor() {
+    afterNextRender(() => this.updateMaxColumns());
+  }
 
   ngOnInit() {
     this.socketService.connect();
@@ -469,12 +660,12 @@ export class RoomComponent implements OnInit, OnDestroy {
 
     // Player joined
     this.socketService
-      .on<{ userId: number; displayName: string; avatarUrl: string | null }>('room:player-joined')
+      .on<{ userId: number; displayName: string; avatarUrl: string | null; winCount?: number }>('room:player-joined')
       .pipe(takeUntil(this.destroy$))
       .subscribe((data) => {
         this.players.update((p) => [
           ...p.filter(x => x.userId !== data.userId),
-          { userId: data.userId, displayName: data.displayName, avatarUrl: data.avatarUrl, isOnline: true },
+          { userId: data.userId, displayName: data.displayName, avatarUrl: data.avatarUrl, isOnline: true, winCount: data.winCount ?? 0 },
         ]);
         this.audioService.play('join');
       });
@@ -514,6 +705,10 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.gameStatus.set('active');
         this.calledNumbers.set([]);
         this.lastCalledNumber.set(null);
+        this.markedCells.set(new Set());
+        this.nearWinPlayers.set(new Set());
+        this.nearWinToast.set(null);
+        this.kinhClaimantUserId.set(null);
         this.audioService.play('start');
       });
 
@@ -525,6 +720,11 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.calledNumbers.set(data.calledNumbers);
         this.lastCalledNumber.set(data.number);
         this.audioService.play('number-called');
+
+        // Hands-free mode: auto-mark + auto-KINH
+        if (this.handsFreeMode()) {
+          this.autoMarkNumber(data.number);
+        }
       });
 
     // All numbers called (all 90 numbers exhausted)
@@ -554,6 +754,7 @@ export class RoomComponent implements OnInit, OnDestroy {
       .subscribe(() => {
         this.gameStatus.set('active');
         this.kinhClaimant.set(null);
+        this.kinhClaimantUserId.set(null);
         this.verifyTicket.set(null);
         this.highlightCalledNumber.set(null);
       });
@@ -564,6 +765,7 @@ export class RoomComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe((data) => {
         this.kinhClaimant.set({ displayName: data.displayName, winType: data.winType });
+        this.kinhClaimantUserId.set(data.userId);
         this.audioService.play('kinh');
       });
 
@@ -629,6 +831,8 @@ export class RoomComponent implements OnInit, OnDestroy {
         avatarUrl: string | null;
         qrCodeUrl: string | null;
         winType?: string;
+        paymentReport?: PaymentReportItem[];
+        totalWinAmount?: number;
       }>('kinh:winner-announcement')
       .pipe(takeUntil(this.destroy$))
       .subscribe((data) => {
@@ -639,6 +843,9 @@ export class RoomComponent implements OnInit, OnDestroy {
           qrCodeUrl: data.qrCodeUrl,
           winType: data.winType,
         });
+        this.isCurrentUserWinner.set(data.winnerId === this.currentUserId());
+        this.paymentReport.set(data.paymentReport || []);
+        this.totalWinAmount.set(data.totalWinAmount || 0);
         this.audioService.play('winner');
       });
 
@@ -685,6 +892,28 @@ export class RoomComponent implements OnInit, OnDestroy {
         });
       });
 
+    // Player near-win (đang đợi KINH)
+    this.socketService
+      .on<{ userId: number; displayName: string; avatarUrl: string | null }>('player:near-win')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((data) => {
+        // Only show toast if this user doesn't already have near-win status
+        const alreadyNearWin = this.nearWinPlayers().has(data.userId);
+
+        // Add to nearWinPlayers set (persists for player list blinking)
+        this.nearWinPlayers.update((s) => {
+          const newSet = new Set(s);
+          newSet.add(data.userId);
+          return newSet;
+        });
+
+        // Show toast popup for 2 seconds only if not already shown
+        if (!alreadyNearWin) {
+          this.nearWinToast.set({ displayName: data.displayName, avatarUrl: data.avatarUrl });
+          setTimeout(() => this.nearWinToast.set(null), 2000);
+        }
+      });
+
     // Game reset
     this.socketService
       .on<{ sessionId: number; sessionNumber: number }>('game:reset')
@@ -696,6 +925,8 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.lastCalledNumber.set(null);
         this.isPenalized.set(false);
         this.penalizedPlayersSet.set(new Set());
+        this.nearWinPlayers.set(new Set());
+        this.nearWinToast.set(null);
         this.winnerInfo.set(null);
         this.paymentAmount.set(null);
         this.markedCells.set(new Set());
@@ -703,6 +934,7 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.myTickets.set([]);
         this.takenSheets.set(new Map());
         this.kinhClaimant.set(null);
+        this.kinhClaimantUserId.set(null);
         this.verifyTicket.set(null);
         this.highlightCalledNumber.set(null);
         this.autoCallEnabled.set(false);
@@ -855,6 +1087,109 @@ export class RoomComponent implements OnInit, OnDestroy {
     }
   }
 
+  toggleHandsFree() {
+    this.handsFreeMode.update((v) => !v);
+  }
+
+  /**
+   * Hands-free: auto-mark all cells matching the called number across all owned tickets.
+   * After marking, check for a win and auto-claim KINH.
+   */
+  private autoMarkNumber(calledNumber: number) {
+    const sid = this.sessionId();
+    if (!sid) return;
+
+    const tickets = this.myTickets();
+    let anyMarked = false;
+
+    for (const ticket of tickets) {
+      for (let r = 0; r < ticket.rows.length; r++) {
+        for (let c = 0; c < ticket.rows[r].length; c++) {
+          const num = ticket.rows[r][c];
+          if (num !== calledNumber) continue;
+
+          const key = `${ticket.id}:${r}:${c}`;
+          if (this.markedCells().has(key)) continue;
+
+          // Mark this cell
+          this.socketService.emit('ticket:mark-cell', {
+            sessionId: sid,
+            ticketId: ticket.id,
+            row: r,
+            col: c,
+            number: calledNumber,
+          });
+          this.markedCells.update((s) => {
+            const newSet = new Set(s);
+            newSet.add(key);
+            return newSet;
+          });
+          anyMarked = true;
+        }
+      }
+    }
+
+    if (anyMarked) {
+      this.audioService.play('mark');
+    }
+
+    // After auto-marking, check for auto-KINH
+    this.checkAutoKinh();
+  }
+
+  /**
+   * Hands-free: check if any ticket now has a win condition and auto-claim KINH.
+   */
+  private checkAutoKinh() {
+    if (this.isPenalized()) return;
+    if (this.gameStatus() !== 'active') return;
+
+    const room = this.room();
+    if (!room) return;
+
+    const enabledTypes = {
+      horizontal: room.winHorizontal,
+      vertical: room.winVertical,
+      diagonal: room.winDiagonal,
+    };
+
+    const calledSet = new Set(this.calledNumbers());
+    const marked = this.markedCells();
+
+    for (const ticket of this.myTickets()) {
+      // Build the effective (called ∩ marked) set, same logic as KinhButtonComponent
+      const effectiveSet = new Set<number>();
+      for (let r = 0; r < ticket.rows.length; r++) {
+        for (let c = 0; c < ticket.rows[r].length; c++) {
+          const num = ticket.rows[r][c];
+          if (num === null || num === 0) continue;
+          const key = `${ticket.id}:${r}:${c}`;
+          if (calledSet.has(num) && marked.has(key)) {
+            effectiveSet.add(num);
+          }
+        }
+      }
+
+      const sharedTicket: SharedTicketData = {
+        id: ticket.id,
+        ticketNumber: ticket.ticketNumber,
+        colorGroup: ticket.colorGroup as SharedTicketData['colorGroup'],
+        rows: ticket.rows as SharedTicketData['rows'],
+      };
+
+      const result = checkAllWins(sharedTicket, effectiveSet, enabledTypes);
+      if (result.hasWin && result.wins.length > 0) {
+        const firstWin = result.wins[0];
+        this.onKinhClaimed({
+          ticketId: ticket.id,
+          winType: firstWin.winType,
+          lineDetails: firstWin.lineDetails,
+        });
+        return; // Only claim once
+      }
+    }
+  }
+
   leaveRoom() {
     const room = this.room();
     if (room) {
@@ -867,7 +1202,31 @@ export class RoomComponent implements OnInit, OnDestroy {
     this.soundEnabled.set(this.audioService.toggle());
   }
 
+  @HostListener('window:resize')
+  onWindowResize() {
+    this.updateMaxColumns();
+  }
+
+  private updateMaxColumns() {
+    const width = window.innerWidth;
+    if (width <= 500) {
+      this.maxColumns.set(1);
+      this.ticketColumns.set(1);
+      return;
+    }
+    // Subtract sidebar (~200px) + padding (~40px) for game area width
+    const gameAreaWidth = width > 768 ? width - 240 : width - 40;
+    const max = Math.max(1, Math.floor(gameAreaWidth / 250));
+    this.maxColumns.set(max);
+    if (this.ticketColumns() > max) {
+      this.ticketColumns.set(max);
+    }
+  }
+
   dismissWinner() {
     this.winnerInfo.set(null);
+    this.isCurrentUserWinner.set(false);
+    this.paymentReport.set([]);
+    this.totalWinAmount.set(0);
   }
 }

@@ -34,6 +34,7 @@ export enum ServerEvents {
   KINH_YOU_WON = 'kinh:you-won',
   KINH_REJECTED_YOU = 'kinh:rejected-you',
   KINH_REJECTED = 'kinh:rejected',
+  PLAYER_NEAR_WIN = 'player:near-win',
   PAYMENT_REQUIRED = 'payment:required',
   ERROR = 'error',
 }
