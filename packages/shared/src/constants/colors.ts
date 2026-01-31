@@ -65,6 +65,22 @@ export const COLOR_GROUPS: Record<ColorGroup, ColorGroupInfo> = {
     tickets: [43, 44, 45, 46, 47, 48],
     sheets: [15, 16],
   },
+  teal: {
+    name: 'Teal',
+    nameVi: 'Xanh ngọc',
+    hex: '#008080',
+    bgHex: '#20B2AA',
+    tickets: [49, 50, 51, 52, 53, 54],
+    sheets: [17, 18],
+  },
+  brown: {
+    name: 'Brown',
+    nameVi: 'Nâu',
+    hex: '#8B4513',
+    bgHex: '#CD853F',
+    tickets: [55, 56, 57, 58, 59, 60],
+    sheets: [19, 20],
+  },
 };
 
 export function getColorForTicket(ticketNumber: number): ColorGroup {

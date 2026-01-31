@@ -1,7 +1,7 @@
 import { TicketData, TicketRow } from '../types/ticket.types';
 
 /**
- * All 48 fixed tickets transcribed from reference images (Tân Tân / BAMBOORAFT).
+ * All 60 fixed tickets (48 original + 12 new teal/brown).
  * Each ticket: 3 rows x 9 columns, each row has exactly 5 numbers and 4 nulls.
  * Column ranges: col0=1-9, col1=10-19, col2=20-29, col3=30-39, col4=40-49,
  *                col5=50-59, col6=60-69, col7=70-79, col8=80-90
@@ -422,10 +422,113 @@ export const FIXED_TICKETS: TicketData[] = [
       [null, 17, null, null, 41, null, 60, null, 86],
     ],
   },
+  // ===== TEAL (Xanh ngọc) - Tickets 49-54, Sheets 17-18 =====
+  // Sheet 17 (tickets 49-50-51)
+  {
+    id: 49, ticketNumber: 49, colorGroup: 'teal',
+    rows: [
+      [5, 16, null, 30, null, null, 60, 70, null],
+      [6, null, 28, null, 42, null, 65, null, 85],
+      [7, null, null, 31, null, 57, 67, null, 88],
+    ],
+  },
+  {
+    id: 50, ticketNumber: 50, colorGroup: 'teal',
+    rows: [
+      [1, 16, null, null, 43, 51, null, 71, null],
+      [6, null, 25, null, 48, null, 61, null, 85],
+      [null, 19, null, 37, null, 53, null, 76, 86],
+    ],
+  },
+  {
+    id: 51, ticketNumber: 51, colorGroup: 'teal',
+    rows: [
+      [2, 12, 20, null, 47, null, null, 76, null],
+      [7, 14, null, 33, null, 57, null, null, 88],
+      [null, 15, 23, 38, null, null, 64, null, 89],
+    ],
+  },
+  // Sheet 18 (tickets 52-53-54)
+  {
+    id: 52, ticketNumber: 52, colorGroup: 'teal',
+    rows: [
+      [1, 10, null, null, 48, 50, null, 70, null],
+      [4, null, 27, null, null, 53, 67, null, 82],
+      [9, null, null, 38, null, 54, 68, null, 87],
+    ],
+  },
+  {
+    id: 53, ticketNumber: 53, colorGroup: 'teal',
+    rows: [
+      [8, null, 20, null, 46, null, 62, 72, null],
+      [null, 13, null, 30, 49, null, null, 75, 81],
+      [null, 16, null, 35, null, 51, null, 76, 85],
+    ],
+  },
+  {
+    id: 54, ticketNumber: 54, colorGroup: 'teal',
+    rows: [
+      [1, null, 20, 38, null, 56, null, 77, null],
+      [8, null, 27, 39, null, 58, null, null, 86],
+      [null, 11, 29, null, 45, null, 64, null, 88],
+    ],
+  },
+
+  // ===== BROWN (Nâu) - Tickets 55-60, Sheets 19-20 =====
+  // Sheet 19 (tickets 55-56-57)
+  {
+    id: 55, ticketNumber: 55, colorGroup: 'brown',
+    rows: [
+      [4, null, 26, null, 49, null, 61, 71, null],
+      [7, null, 27, null, null, 53, 68, null, 80],
+      [null, 11, null, 31, null, 55, null, 78, 82],
+    ],
+  },
+  {
+    id: 56, ticketNumber: 56, colorGroup: 'brown',
+    rows: [
+      [2, 10, null, 30, null, 50, null, 75, null],
+      [4, null, 22, null, 46, null, 65, 77, null],
+      [null, 16, null, 32, null, 57, null, 78, 90],
+    ],
+  },
+  {
+    id: 57, ticketNumber: 57, colorGroup: 'brown',
+    rows: [
+      [1, 18, null, 34, null, 59, null, 71, null],
+      [5, null, 20, 35, null, null, 65, 74, null],
+      [7, null, null, 38, 49, null, 68, null, 87],
+    ],
+  },
+  // Sheet 20 (tickets 58-59-60)
+  {
+    id: 58, ticketNumber: 58, colorGroup: 'brown',
+    rows: [
+      [1, null, 24, null, 45, 52, null, 73, null],
+      [8, null, null, 34, 47, null, 61, null, 82],
+      [null, 15, null, 38, 48, null, 63, null, 87],
+    ],
+  },
+  {
+    id: 59, ticketNumber: 59, colorGroup: 'brown',
+    rows: [
+      [1, 10, null, 31, null, 54, null, 79, null],
+      [6, null, 23, null, 43, 57, null, null, 82],
+      [null, 16, null, 37, 48, null, 64, null, 87],
+    ],
+  },
+  {
+    id: 60, ticketNumber: 60, colorGroup: 'brown',
+    rows: [
+      [9, null, 20, 31, null, 50, 66, null, null],
+      [null, 13, 22, null, 44, 51, null, 78, null],
+      [null, 14, 23, null, null, 56, 68, null, 81],
+    ],
+  },
 ];
 
 /**
- * Get a ticket by its number (1-48)
+ * Get a ticket by its number (1-60)
  */
 export function getTicketByNumber(ticketNumber: number): TicketData | undefined {
   return FIXED_TICKETS.find(t => t.ticketNumber === ticketNumber);

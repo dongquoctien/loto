@@ -15,7 +15,7 @@ export class TicketEntity {
   @Column({
     name: 'color_group',
     type: 'enum',
-    enum: ['orange', 'yellow', 'purple', 'pink', 'blue', 'green', 'lime', 'red'],
+    enum: ['orange', 'yellow', 'purple', 'pink', 'blue', 'green', 'lime', 'red', 'teal', 'brown'],
   })
   colorGroup: string;
 

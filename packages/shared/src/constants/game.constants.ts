@@ -8,7 +8,7 @@ export const GAME_CONSTANTS = {
   DEFAULT_PRICE_PER_SHEET: 10000, // VND
   DEFAULT_MAX_PLAYERS: 20,
   ROOM_CODE_LENGTH: 6,
-  MAX_SHEETS_PER_PLAYER: 16, // Can buy all if they want
+  MAX_SHEETS_PER_PLAYER: 20, // Can buy all if they want
 };
 
 /**

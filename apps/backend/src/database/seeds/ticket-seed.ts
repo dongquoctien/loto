@@ -27,6 +27,11 @@ async function seed() {
   const ticketRepo = dataSource.getRepository(TicketEntity);
   const sheetRepo = dataSource.getRepository(SheetEntity);
 
+  // Ensure enum columns include new color groups
+  await dataSource.query(`ALTER TABLE tickets MODIFY COLUMN color_group ENUM('orange','yellow','purple','pink','blue','green','lime','red','teal','brown') NOT NULL`);
+  await dataSource.query(`ALTER TABLE sheets MODIFY COLUMN color_group ENUM('orange','yellow','purple','pink','blue','green','lime','red','teal','brown') NOT NULL`);
+  console.log('Updated color_group enum columns');
+
   // Clear existing data (disable FK checks for truncate)
   await dataSource.query('SET FOREIGN_KEY_CHECKS = 0');
   await sheetRepo.clear();

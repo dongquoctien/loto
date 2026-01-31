@@ -23,6 +23,8 @@ const COLOR_HEX: Record<string, { bg: string; border: string; header: string }> 
   green: { bg: '#E8F5E9', border: '#3CB371', header: '#3CB371' },
   lime: { bg: '#F1F8E9', border: '#9ACD32', header: '#9ACD32' },
   red: { bg: '#FFEBEE', border: '#DC143C', header: '#DC143C' },
+  teal: { bg: '#E0F2F1', border: '#008080', header: '#008080' },
+  brown: { bg: '#EFEBE9', border: '#8B4513', header: '#8B4513' },
 };
 
 @Component({

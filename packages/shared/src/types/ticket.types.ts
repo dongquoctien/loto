@@ -28,7 +28,9 @@ export type ColorGroup =
   | 'blue'
   | 'green'
   | 'lime'
-  | 'red';
+  | 'red'
+  | 'teal'
+  | 'brown';
 
 export type WinType = 'horizontal' | 'vertical' | 'diagonal';
 

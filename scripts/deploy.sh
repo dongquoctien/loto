@@ -1,6 +1,7 @@
 #!/bin/bash
 # ============================================================
 # Loto Production Deployment Script
+# Shares nginx with ChatLingua (external network)
 #
 # Usage:
 #   ./scripts/deploy.sh              # Full deploy (build + start)
@@ -9,7 +10,12 @@
 
 set -e
 
-cd /opt/loto
+LOTO_DIR="/opt/loto"
+CHATLINGUA_DIR="/opt/chatlingua"
+COMPOSE_FILE="docker-compose.prod.yml"
+DOMAIN="${DOMAIN:-loto.dongquoctien.online}"
+
+cd $LOTO_DIR
 
 # Check if .env exists
 if [ ! -f .env ]; then
@@ -21,11 +27,26 @@ fi
 # Load environment
 source .env
 
-COMPOSE_FILE="docker-compose.prod.yml"
-
 echo "=========================================="
 echo "Loto Production Deployment"
 echo "=========================================="
+echo "Mode: Shared nginx with ChatLingua"
+echo ""
+
+# ------------------------------------------
+# Pre-check: ChatLingua nginx must be running
+# ------------------------------------------
+if ! docker ps --format '{{.Names}}' | grep -q 'chatlingua-nginx'; then
+    echo "ERROR: chatlingua-nginx container is not running!"
+    echo "Loto shares nginx with ChatLingua. Start ChatLingua first."
+    exit 1
+fi
+
+# ------------------------------------------
+# Detect ChatLingua Docker network name
+# ------------------------------------------
+CHATLINGUA_NETWORK=$(docker inspect chatlingua-nginx --format '{{range $key, $val := .NetworkSettings.Networks}}{{$key}} {{end}}' | tr ' ' '\n' | head -1)
+echo "ChatLingua network: $CHATLINGUA_NETWORK"
 echo ""
 
 if [ "$1" == "--restart" ]; then
@@ -34,7 +55,10 @@ if [ "$1" == "--restart" ]; then
     echo "Step 1: Restarting containers..."
     docker compose -f $COMPOSE_FILE restart
     echo ""
-    echo "Step 2: Checking status..."
+    echo "Step 2: Reloading ChatLingua nginx..."
+    docker exec chatlingua-nginx nginx -s reload
+    echo ""
+    echo "Step 3: Checking status..."
     docker compose -f $COMPOSE_FILE ps
     echo ""
     echo "Restart complete!"
@@ -52,40 +76,49 @@ echo "Step 2: Building Docker images..."
 docker compose -f $COMPOSE_FILE build --no-cache
 
 echo ""
-echo "Step 3: Stopping old containers..."
+echo "Step 3: Stopping old Loto containers..."
 docker compose -f $COMPOSE_FILE down
 
 echo ""
-echo "Step 4: Starting new containers..."
+echo "Step 4: Copy nginx config to ChatLingua..."
+cp $LOTO_DIR/nginx/conf.d/loto.conf $CHATLINGUA_DIR/nginx/conf.d/loto.conf
+echo "  Copied loto.conf -> $CHATLINGUA_DIR/nginx/conf.d/"
+
+echo ""
+echo "Step 5: Starting Loto containers..."
 docker compose -f $COMPOSE_FILE up -d
 
 echo ""
-echo "Step 5: Waiting for services to start..."
+echo "Step 6: Waiting for services to start..."
 sleep 15
 
 echo ""
-echo "Step 6: Health check..."
+echo "Step 7: Reloading ChatLingua nginx..."
+docker exec chatlingua-nginx nginx -t && docker exec chatlingua-nginx nginx -s reload
+echo "  Nginx config test + reload OK"
+
+echo ""
+echo "Step 8: Health check..."
 docker compose -f $COMPOSE_FILE ps
 
-# Check service health
+# Check service health via ChatLingua nginx
 echo ""
-echo "Step 7: Verifying services..."
+echo "Step 9: Verifying services..."
 
-# Check via nginx (port 80/443)
-HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/health 2>/dev/null || echo "000")
-API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/api 2>/dev/null || echo "000")
+HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ${DOMAIN}" http://localhost/health 2>/dev/null || echo "000")
+API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ${DOMAIN}" http://localhost/api 2>/dev/null || echo "000")
 
-echo "  Health: HTTP $HEALTH_STATUS"
-echo "  API:    HTTP $API_STATUS"
+echo "  Health (${DOMAIN}): HTTP $HEALTH_STATUS"
+echo "  API    (${DOMAIN}): HTTP $API_STATUS"
 
-if [ "$HEALTH_STATUS" != "200" ]; then
+if [ "$HEALTH_STATUS" != "200" ] && [ "$HEALTH_STATUS" != "301" ]; then
     echo ""
     echo "Warning: Services may not be healthy yet."
     echo "Check logs with: docker compose -f $COMPOSE_FILE logs -f"
 fi
 
 echo ""
-echo "Step 8: Cleanup old images..."
+echo "Step 10: Cleanup old images..."
 docker image prune -f
 
 echo ""
@@ -93,13 +126,14 @@ echo "=========================================="
 echo "Deployment Complete!"
 echo "=========================================="
 echo ""
-echo "Website: https://loto.dongquoctien.online"
-echo "API:     https://loto.dongquoctien.online/api"
+echo "Website: https://${DOMAIN}"
+echo "API:     https://${DOMAIN}/api"
 echo ""
 echo "Useful commands:"
 echo "  View logs:     docker compose -f $COMPOSE_FILE logs -f"
 echo "  View backend:  docker compose -f $COMPOSE_FILE logs -f backend"
-echo "  Restart:       docker compose -f $COMPOSE_FILE restart"
+echo "  Restart:       ./scripts/deploy.sh --restart"
 echo "  Stop:          docker compose -f $COMPOSE_FILE down"
 echo "  DB shell:      docker exec -it loto-mysql mysql -u loto_user -p loto_db"
+echo "  Nginx logs:    docker logs chatlingua-nginx --tail 50"
 echo ""

@@ -1,12 +1,16 @@
 #!/bin/bash
 # ============================================================
 # Loto SSL Certificate Setup Script
+# Uses ChatLingua's certbot and nginx (shared infrastructure)
 # Run after DNS is configured and before first deploy
 # ============================================================
 
 set -e
 
-cd /opt/loto
+LOTO_DIR="/opt/loto"
+CHATLINGUA_DIR="/opt/chatlingua"
+
+cd $LOTO_DIR
 
 # Load environment
 if [ ! -f .env ]; then
@@ -21,25 +25,27 @@ EMAIL="${SSL_EMAIL:-admin@dongquoctien.online}"
 
 echo "=========================================="
 echo "Loto SSL Certificate Setup"
+echo "(Using ChatLingua shared infrastructure)"
 echo "=========================================="
 echo ""
 echo "Domain: ${DOMAIN}"
 echo "Email:  ${EMAIL}"
 echo ""
 
-# Create directories
-mkdir -p certbot/conf certbot/www
-
-# Step 1: Create temporary nginx config for SSL challenge
-echo "Step 1: Creating temporary nginx config..."
-mkdir -p nginx/conf.d
-
-# Backup original config
-if [ -f nginx/conf.d/loto.conf ]; then
-    cp nginx/conf.d/loto.conf nginx/conf.d/loto.conf.bak
+# ------------------------------------------
+# Pre-check: ChatLingua nginx must be running
+# ------------------------------------------
+if ! docker ps --format '{{.Names}}' | grep -q 'chatlingua-nginx'; then
+    echo "ERROR: chatlingua-nginx container is not running!"
+    echo "Start ChatLingua first: cd $CHATLINGUA_DIR && docker compose up -d"
+    exit 1
 fi
 
-cat > nginx/conf.d/loto.conf << EOF
+# Step 1: Add temporary nginx config for ACME challenge
+echo "Step 1: Adding temporary nginx config for SSL challenge..."
+
+# Save loto.conf for ACME challenge only (HTTP, no SSL)
+cat > $CHATLINGUA_DIR/nginx/conf.d/loto.conf << EOF
 server {
     listen 80;
     listen [::]:80;
@@ -57,23 +63,24 @@ server {
 EOF
 
 echo ""
-echo "Step 2: Starting nginx for SSL challenge..."
-docker compose -f docker-compose.prod.yml up -d nginx
+echo "Step 2: Reloading ChatLingua nginx with temporary config..."
+docker exec chatlingua-nginx nginx -t && docker exec chatlingua-nginx nginx -s reload
+sleep 3
 
-echo ""
-echo "Step 3: Waiting for nginx to start..."
-sleep 5
+# Verify nginx is responding for loto domain
+HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ${DOMAIN}" http://localhost 2>/dev/null || echo "000")
+echo "  HTTP status for ${DOMAIN}: $HTTP_STATUS"
 
-# Verify nginx is responding
-HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost 2>/dev/null || echo "000")
 if [ "$HTTP_STATUS" != "200" ]; then
-    echo "Warning: Nginx may not be ready (HTTP $HTTP_STATUS). Waiting more..."
+    echo "Warning: Nginx may not be ready. Waiting more..."
     sleep 5
 fi
 
 echo ""
-echo "Step 4: Requesting SSL certificate from Let's Encrypt..."
-docker compose -f docker-compose.prod.yml run --rm certbot certonly \
+echo "Step 3: Requesting SSL certificate from Let's Encrypt..."
+
+# Use ChatLingua's certbot container to request cert
+docker exec chatlingua-certbot certbot certonly \
     --webroot \
     --webroot-path=/var/www/certbot \
     --email ${EMAIL} \
@@ -81,26 +88,36 @@ docker compose -f docker-compose.prod.yml run --rm certbot certonly \
     --no-eff-email \
     -d ${DOMAIN}
 
-echo ""
-echo "Step 5: Restoring full nginx config..."
-# Restore original config
-if [ -f nginx/conf.d/loto.conf.bak ]; then
-    mv nginx/conf.d/loto.conf.bak nginx/conf.d/loto.conf
-else
-    # If no backup, restore from git
-    git checkout nginx/conf.d/loto.conf 2>/dev/null || echo "Warning: Could not restore config from git"
+# If exec fails (certbot not running as daemon), try run
+if [ $? -ne 0 ]; then
+    echo "  Trying with docker run instead..."
+    docker run --rm \
+        -v ${CHATLINGUA_DIR}/certbot/conf:/etc/letsencrypt \
+        -v ${CHATLINGUA_DIR}/certbot/www:/var/www/certbot \
+        certbot/certbot certonly \
+        --webroot \
+        --webroot-path=/var/www/certbot \
+        --email ${EMAIL} \
+        --agree-tos \
+        --no-eff-email \
+        -d ${DOMAIN}
 fi
 
 echo ""
-echo "Step 6: Stopping temporary nginx..."
-docker compose -f docker-compose.prod.yml down
+echo "Step 4: Restoring full Loto nginx config..."
+cp $LOTO_DIR/nginx/conf.d/loto.conf $CHATLINGUA_DIR/nginx/conf.d/loto.conf
+
+echo ""
+echo "Step 5: Testing nginx config..."
+docker exec chatlingua-nginx nginx -t
 
 echo ""
 echo "=========================================="
 echo "SSL Certificate Setup Complete!"
 echo "=========================================="
 echo ""
-echo "Certificate: /opt/loto/certbot/conf/live/${DOMAIN}/"
+echo "Certificate: /etc/letsencrypt/live/${DOMAIN}/"
+echo "(inside chatlingua-nginx container)"
 echo ""
-echo "Next step: Run ./scripts/deploy.sh to deploy the full application"
+echo "Next step: Run ./scripts/deploy.sh to deploy Loto"
 echo ""
