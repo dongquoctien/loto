@@ -12,6 +12,8 @@ export enum ClientEvents {
   KINH_CLAIM = 'kinh:claim',
   KINH_APPROVE = 'kinh:approve',
   KINH_REJECT = 'kinh:reject',
+  KINH_START_CHALLENGE = 'kinh:start-challenge',
+  CHALLENGE_PICK_CARD = 'challenge:pick-card',
 }
 
 export enum ServerEvents {
@@ -28,12 +30,16 @@ export enum ServerEvents {
   GAME_PAUSED = 'game:paused',
   GAME_RESUMED = 'game:resumed',
   GAME_ENDED = 'game:ended',
-  KINH_CLAIMED = 'kinh:claimed',
+  KINH_CLAIMS_UPDATED = 'kinh:claims-updated',
   KINH_VERIFY_REQUEST = 'kinh:verify-request',
   KINH_WINNER_ANNOUNCEMENT = 'kinh:winner-announcement',
   KINH_YOU_WON = 'kinh:you-won',
   KINH_REJECTED_YOU = 'kinh:rejected-you',
   KINH_REJECTED = 'kinh:rejected',
+  CHALLENGE_STARTED = 'challenge:started',
+  CHALLENGE_CARD_PICKED = 'challenge:card-picked',
+  CHALLENGE_YOUR_PICK = 'challenge:your-pick',
+  CHALLENGE_RESULT = 'challenge:result',
   PLAYER_NEAR_WIN = 'player:near-win',
   PAYMENT_REQUIRED = 'payment:required',
   ERROR = 'error',

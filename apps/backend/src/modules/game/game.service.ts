@@ -11,6 +11,23 @@ import { TicketService } from '../ticket/ticket.service';
 import { RoomService } from '../room/room.service';
 import { WinType, LineDetails, validateWinClaim, TicketData } from '@loto/shared';
 
+interface KinhClaimEntry {
+  userId: number;
+  ticketId: number;
+  winType: WinType;
+  lineDetails: LineDetails;
+  preValidated: boolean;
+  claimOrder: number;
+}
+
+interface ChallengeState {
+  cards: number[];
+  picks: Map<number, { cardIndex: number; value: number }>;
+  participantIds: number[];
+  timeoutTimer: ReturnType<typeof setTimeout> | null;
+  status: 'picking' | 'done';
+}
+
 interface InMemoryGameState {
   calledNumbers: number[];
   remainingNumbers: number[];
@@ -18,12 +35,8 @@ interface InMemoryGameState {
   status: 'preparing' | 'active' | 'paused' | 'paused_for_kinh' | 'finished';
   purchasedSheets: Map<number, number>; // sheetId -> userId
   penalizedPlayers: Set<number>;
-  currentKinhClaim: {
-    userId: number;
-    ticketId: number;
-    winType: WinType;
-    lineDetails: LineDetails;
-  } | null;
+  kinhClaims: KinhClaimEntry[];
+  challenge: ChallengeState | null;
 }
 
 @Injectable()
@@ -78,7 +91,8 @@ export class GameService {
       status: 'preparing',
       purchasedSheets: new Map(),
       penalizedPlayers: new Set(),
-      currentKinhClaim: null,
+      kinhClaims: [],
+      challenge: null,
     });
 
     return savedSession;
@@ -193,10 +207,10 @@ export class GameService {
     ticketId: number,
     winType: WinType,
     lineDetails: LineDetails,
-  ): Promise<{ preValidated: boolean }> {
+  ): Promise<{ preValidated: boolean; isFirstClaim: boolean; claimOrder: number }> {
     const state = this.getState(sessionId);
 
-    if (state.status !== 'active') {
+    if (state.status !== 'active' && state.status !== 'paused_for_kinh') {
       throw new BadRequestException('Game is not active');
     }
 
@@ -204,7 +218,12 @@ export class GameService {
       throw new ForbiddenException('You have been penalized and cannot claim');
     }
 
-    // Server-side pre-validation: check if the claim could be valid
+    // Prevent duplicate claims from same user
+    if (state.kinhClaims.some((c) => c.userId === userId)) {
+      throw new BadRequestException('You have already claimed');
+    }
+
+    // Server-side pre-validation
     let preValidated = false;
     try {
       const ticket = await this.ticketService.getTicketById(ticketId);
@@ -229,32 +248,35 @@ export class GameService {
       this.logger.error('Error during kinh pre-validation', err);
     }
 
-    // Still pause the game regardless - owner makes final decision
+    const isFirstClaim = state.kinhClaims.length === 0;
+    const claimOrder = state.kinhClaims.length + 1;
+
+    state.kinhClaims.push({ userId, ticketId, winType, lineDetails, preValidated, claimOrder });
     state.status = 'paused_for_kinh';
-    state.currentKinhClaim = { userId, ticketId, winType, lineDetails };
 
     await this.sessionRepository.update(sessionId, { status: 'paused_for_kinh' });
 
-    return { preValidated };
+    return { preValidated, isFirstClaim, claimOrder };
   }
 
-  async approveKinh(sessionId: number): Promise<GameResultEntity> {
+  async approveKinhForUser(sessionId: number, winnerId: number): Promise<GameResultEntity> {
     const state = this.getState(sessionId);
-    const claim = state.currentKinhClaim;
+    const claim = state.kinhClaims.find((c) => c.userId === winnerId);
 
     if (!claim) {
-      throw new BadRequestException('No pending kinh claim');
+      throw new BadRequestException('No pending kinh claim for this user');
     }
 
     state.status = 'finished';
-    state.currentKinhClaim = null;
+    state.kinhClaims = [];
+    this.clearChallengeTimer(sessionId);
+    state.challenge = null;
 
     if (state.autoCallTimer) {
       clearInterval(state.autoCallTimer);
       state.autoCallTimer = null;
     }
 
-    // Save result
     const result = await this.gameResultRepository.save({
       sessionId,
       winnerId: claim.userId,
@@ -268,27 +290,150 @@ export class GameService {
     return result;
   }
 
-  async rejectKinh(sessionId: number): Promise<void> {
+  async rejectKinhForUser(sessionId: number, rejectedUserId: number): Promise<{ remainingClaims: number }> {
     const state = this.getState(sessionId);
-    const claim = state.currentKinhClaim;
+    const claimIdx = state.kinhClaims.findIndex((c) => c.userId === rejectedUserId);
 
-    if (!claim) {
-      throw new BadRequestException('No pending kinh claim');
+    if (claimIdx === -1) {
+      throw new BadRequestException('No pending kinh claim for this user');
     }
 
-    // Penalize the player
-    state.penalizedPlayers.add(claim.userId);
-    state.status = 'active';
-    state.currentKinhClaim = null;
+    state.kinhClaims.splice(claimIdx, 1);
+    state.penalizedPlayers.add(rejectedUserId);
 
     await this.penaltyRepository.save({
       sessionId,
-      userId: claim.userId,
+      userId: rejectedUserId,
       reason: 'wrong_kinh',
       mustPay: true,
     });
 
-    await this.sessionRepository.update(sessionId, { status: 'active' });
+    if (state.kinhClaims.length === 0) {
+      state.status = 'active';
+      this.clearChallengeTimer(sessionId);
+      state.challenge = null;
+      await this.sessionRepository.update(sessionId, { status: 'active' });
+    }
+
+    return { remainingClaims: state.kinhClaims.length };
+  }
+
+  startChallenge(sessionId: number): ChallengeState {
+    const state = this.getState(sessionId);
+
+    if (state.kinhClaims.length < 2) {
+      throw new BadRequestException('Need at least 2 claims for a challenge');
+    }
+
+    // Generate 10 unique random numbers 0-99
+    const cardValues: number[] = [];
+    const usedValues = new Set<number>();
+    while (cardValues.length < 10) {
+      const v = Math.floor(Math.random() * 100);
+      if (!usedValues.has(v)) {
+        usedValues.add(v);
+        cardValues.push(v);
+      }
+    }
+
+    const challenge: ChallengeState = {
+      cards: cardValues,
+      picks: new Map(),
+      participantIds: state.kinhClaims.map((c) => c.userId),
+      timeoutTimer: null,
+      status: 'picking',
+    };
+
+    state.challenge = challenge;
+    return challenge;
+  }
+
+  pickChallengeCard(
+    sessionId: number,
+    userId: number,
+    cardIndex: number,
+  ): { value: number; allPicked: boolean } {
+    const state = this.getState(sessionId);
+    const challenge = state.challenge;
+
+    if (!challenge || challenge.status !== 'picking') {
+      throw new BadRequestException('No active challenge');
+    }
+
+    if (!challenge.participantIds.includes(userId)) {
+      throw new ForbiddenException('You are not a challenge participant');
+    }
+
+    if (challenge.picks.has(userId)) {
+      throw new BadRequestException('You have already picked a card');
+    }
+
+    // Check card not already taken
+    for (const pick of challenge.picks.values()) {
+      if (pick.cardIndex === cardIndex) {
+        throw new BadRequestException('This card is already taken');
+      }
+    }
+
+    if (cardIndex < 0 || cardIndex >= challenge.cards.length) {
+      throw new BadRequestException('Invalid card index');
+    }
+
+    const value = challenge.cards[cardIndex];
+    challenge.picks.set(userId, { cardIndex, value });
+
+    const allPicked = challenge.picks.size === challenge.participantIds.length;
+
+    return { value, allPicked };
+  }
+
+  resolveChallengeWinner(sessionId: number): {
+    winnerId: number;
+    picks: { userId: number; cardIndex: number; value: number }[];
+    allCardValues: number[];
+  } {
+    const state = this.getState(sessionId);
+    const challenge = state.challenge;
+
+    if (!challenge) {
+      throw new BadRequestException('No active challenge');
+    }
+
+    challenge.status = 'done';
+
+    const picks: { userId: number; cardIndex: number; value: number }[] = [];
+    let winnerId = -1;
+    let highestValue = -1;
+
+    for (const participantId of challenge.participantIds) {
+      const pick = challenge.picks.get(participantId);
+      if (pick) {
+        picks.push({ userId: participantId, cardIndex: pick.cardIndex, value: pick.value });
+        if (pick.value > highestValue) {
+          highestValue = pick.value;
+          winnerId = participantId;
+        }
+      } else {
+        // Non-picker gets -1 (auto-lose)
+        picks.push({ userId: participantId, cardIndex: -1, value: -1 });
+      }
+    }
+
+    return { winnerId, picks, allCardValues: challenge.cards };
+  }
+
+  clearChallengeTimer(sessionId: number): void {
+    const state = this.gameStates.get(sessionId);
+    if (state?.challenge?.timeoutTimer) {
+      clearTimeout(state.challenge.timeoutTimer);
+      state.challenge.timeoutTimer = null;
+    }
+  }
+
+  removeClaimForUser(sessionId: number, userId: number): void {
+    const state = this.gameStates.get(sessionId);
+    if (!state) return;
+    state.kinhClaims = state.kinhClaims.filter((c) => c.userId !== userId);
   }
 
   calculatePayments(
@@ -398,14 +543,25 @@ export class GameService {
       penalizedPlayers.add(p.userId);
     }
 
+    // Cannot recover pending kinh claims from DB — if status was paused_for_kinh, resume to active
+    let recoveredStatus = session.status;
+    if (recoveredStatus === 'paused_for_kinh') {
+      recoveredStatus = 'active';
+      this.logger.warn(
+        `Session ${session.id} was paused_for_kinh but claims cannot be recovered — resuming to active`,
+      );
+      this.sessionRepository.update(session.id, { status: 'active' });
+    }
+
     const state: InMemoryGameState = {
       calledNumbers,
       remainingNumbers,
       autoCallTimer: null,
-      status: session.status,
+      status: recoveredStatus,
       purchasedSheets,
       penalizedPlayers,
-      currentKinhClaim: null, // Cannot recover pending claim — will be treated as if rejected
+      kinhClaims: [],
+      challenge: null,
     };
 
     // Store in memory
@@ -413,7 +569,7 @@ export class GameService {
     this.sessionRoomMap.set(session.id, roomId);
 
     this.logger.log(
-      `Recovered session ${session.id} for room ${roomId} from DB (status: ${session.status}, called: ${calledNumbers.length}, sheets: ${purchasedSheets.size})`,
+      `Recovered session ${session.id} for room ${roomId} from DB (status: ${recoveredStatus}, called: ${calledNumbers.length}, sheets: ${purchasedSheets.size})`,
     );
 
     return { sessionId: session.id, state };
@@ -497,6 +653,7 @@ export class GameService {
     if (state?.autoCallTimer) {
       clearInterval(state.autoCallTimer);
     }
+    this.clearChallengeTimer(sessionId);
     this.gameStates.delete(sessionId);
     this.sessionRoomMap.delete(sessionId);
   }

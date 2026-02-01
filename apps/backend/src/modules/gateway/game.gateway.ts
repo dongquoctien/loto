@@ -250,6 +250,12 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Delete room from DB
       await this.roomService.deleteRoom(data.roomId);
     } else {
+      // Remove any active kinh claims from the leaving player
+      const activeSession = this.gameService.findSessionForRoom(data.roomId);
+      if (activeSession) {
+        this.gameService.removeClaimForUser(activeSession.sessionId, client.userId);
+      }
+
       await this.roomService.leaveRoom(data.roomId, client.userId);
       client.leave(`room:${data.roomId}`);
       client.currentRoomId = undefined;
@@ -455,10 +461,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!client.userId || !client.currentRoomId) return;
 
     try {
-      // Pause auto-call
-      this.stopAutoCall(data.sessionId);
-
-      const { preValidated } = await this.gameService.handleKinhClaim(
+      const { isFirstClaim } = await this.gameService.handleKinhClaim(
         data.sessionId,
         client.userId,
         data.ticketId,
@@ -466,43 +469,24 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         data.lineDetails,
       );
 
-      const user = await this.userService.findById(client.userId);
-      const ticket = await this.ticketService.getTicketById(data.ticketId);
+      // On first claim: stop auto-call and pause game
+      if (isFirstClaim) {
+        this.stopAutoCall(data.sessionId);
+        this.server.to(`room:${client.currentRoomId}`).emit('game:paused');
+      }
 
-      // Notify all players
-      this.server.to(`room:${client.currentRoomId}`).emit('game:paused');
-      this.server.to(`room:${client.currentRoomId}`).emit('kinh:claimed', {
-        userId: client.userId,
-        displayName: user.displayName || user.username,
-        avatarUrl: user.avatarUrl,
-        ticketId: data.ticketId,
-        winType: data.winType,
-        lineDetails: data.lineDetails,
-        ticketRows: ticket ? [ticket.row1, ticket.row2, ticket.row3] : null,
-      });
+      // Build and broadcast updated claims to all players
+      const claimsPayload = await this.buildClaimsPayload(data.sessionId);
+      this.server.to(`room:${client.currentRoomId}`).emit('kinh:claims-updated', claimsPayload);
 
-      // Send verification request to room owner
+      // Send verify request to owner
       const room = await this.roomService.findById(client.currentRoomId);
       const ownerSocketId = this.userSockets.get(room.ownerId);
       if (ownerSocketId) {
-        this.server.to(ownerSocketId).emit('kinh:verify-request', {
-          userId: client.userId,
-          displayName: user.displayName || user.username,
-          ticketId: data.ticketId,
-          ticket: ticket
-            ? {
-                id: ticket.id,
-                ticketNumber: ticket.ticketNumber,
-                colorGroup: ticket.colorGroup,
-                rows: [ticket.row1, ticket.row2, ticket.row3],
-              }
-            : null,
-          winType: data.winType,
-          lineDetails: data.lineDetails,
-          calledNumbers: this.gameService.getState(data.sessionId).calledNumbers,
-          preValidated,
-        });
+        const verifyPayload = await this.buildVerifyPayloads(data.sessionId);
+        this.server.to(ownerSocketId).emit('kinh:verify-request', verifyPayload);
       }
+
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Kinh claim failed';
       client.emit('error', { message });
@@ -512,7 +496,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('kinh:approve')
   async handleKinhApprove(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() data: { sessionId: number },
+    @MessageBody() data: { sessionId: number; userId: number },
   ) {
     if (!client.userId || !client.currentRoomId) return;
 
@@ -520,81 +504,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (room.ownerId !== client.userId) return;
 
     try {
-      const state = this.gameService.getState(data.sessionId);
-      const claim = state.currentKinhClaim;
-      if (!claim) return;
-
-      const result = await this.gameService.approveKinh(data.sessionId);
-      await this.userService.incrementWinCount(claim.userId);
-      const winner = await this.userService.findById(claim.userId);
-      const payments = this.gameService.calculatePayments(
-        data.sessionId,
-        room.pricePerSheet,
-        claim.userId,
-      );
-
-      // Build payment report with player details for winner popup
-      const paymentReport: {
-        userId: number;
-        displayName: string;
-        avatarUrl: string | null;
-        sheetCount: number;
-        amount: number;
-      }[] = [];
-
-      // Count sheets per user from game state (reuse `state` from above)
-      const userSheetCounts = new Map<number, number>();
-      for (const [, userId] of state.purchasedSheets) {
-        userSheetCounts.set(userId, (userSheetCounts.get(userId) || 0) + 1);
-      }
-
-      for (const payment of payments) {
-        const paymentUser = await this.userService.findById(payment.userId);
-        paymentReport.push({
-          userId: payment.userId,
-          displayName: paymentUser.displayName || paymentUser.username,
-          avatarUrl: paymentUser.avatarUrl,
-          sheetCount: userSheetCounts.get(payment.userId) || 0,
-          amount: payment.amount,
-        });
-      }
-
-      const totalWinAmount = paymentReport.reduce((sum, p) => sum + p.amount, 0);
-
-      // Send winner announcement to everyone
-      const winnerSocketId = this.userSockets.get(claim.userId);
-
-      this.server.to(`room:${client.currentRoomId}`).emit('kinh:winner-announcement', {
-        winnerId: claim.userId,
-        displayName: winner.displayName || winner.username,
-        avatarUrl: winner.avatarUrl,
-        qrCodeUrl: winner.qrCodeUrl,
-        winType: result.winType,
-        ticketId: result.winningTicketId,
-        paymentReport,
-        totalWinAmount,
-      });
-
-      // Send personalized "you won" to winner
-      if (winnerSocketId) {
-        this.server.to(winnerSocketId).emit('kinh:you-won', {
-          winType: result.winType,
-          ticketId: result.winningTicketId,
-        });
-      }
-
-      // Send payment info to each loser
-      for (const payment of payments) {
-        const socketId = this.userSockets.get(payment.userId);
-        if (socketId) {
-          this.server.to(socketId).emit('payment:required', {
-            amount: payment.amount,
-            winnerId: claim.userId,
-            winnerDisplayName: winner.displayName || winner.username,
-            winnerQrCodeUrl: winner.qrCodeUrl,
-          });
-        }
-      }
+      await this.announceWinner(data.sessionId, data.userId, client.currentRoomId, room);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to approve kinh';
       client.emit('error', { message });
@@ -604,6 +514,57 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('kinh:reject')
   async handleKinhReject(
     @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { sessionId: number; userId: number },
+  ) {
+    if (!client.userId || !client.currentRoomId) return;
+
+    const room = await this.roomService.findById(client.currentRoomId);
+    if (room.ownerId !== client.userId) return;
+
+    try {
+      const { remainingClaims } = await this.gameService.rejectKinhForUser(data.sessionId, data.userId);
+
+      // Notify the rejected player
+      const cheaterSocketId = this.userSockets.get(data.userId);
+      if (cheaterSocketId) {
+        this.server.to(cheaterSocketId).emit('kinh:rejected-you', {
+          reason: 'Kinh sai - bạn bị phạt!',
+        });
+      }
+
+      // Notify everyone
+      this.server.to(`room:${client.currentRoomId}`).emit('kinh:rejected', {
+        userId: data.userId,
+      });
+
+      if (remainingClaims > 0) {
+        // Update claims for all players
+        const claimsPayload = await this.buildClaimsPayload(data.sessionId);
+        this.server.to(`room:${client.currentRoomId}`).emit('kinh:claims-updated', claimsPayload);
+
+        // Update verify for owner
+        const ownerSocketId = this.userSockets.get(room.ownerId);
+        if (ownerSocketId) {
+          const verifyPayload = await this.buildVerifyPayloads(data.sessionId);
+          this.server.to(ownerSocketId).emit('kinh:verify-request', verifyPayload);
+        }
+      } else {
+        // No claims left — resume game
+        this.server.to(`room:${client.currentRoomId}`).emit('game:resumed');
+
+        if (room.callMode === 'auto') {
+          this.startAutoCall(data.sessionId, client.currentRoomId, room.autoCallInterval);
+        }
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to reject kinh';
+      client.emit('error', { message });
+    }
+  }
+
+  @SubscribeMessage('kinh:start-challenge')
+  async handleStartChallenge(
+    @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { sessionId: number },
   ) {
     if (!client.userId || !client.currentRoomId) return;
@@ -612,34 +573,78 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (room.ownerId !== client.userId) return;
 
     try {
-      const state = this.gameService.getState(data.sessionId);
-      const claim = state.currentKinhClaim;
-      if (!claim) return;
+      const challenge = this.gameService.startChallenge(data.sessionId);
+      const roomId = client.currentRoomId;
 
-      await this.gameService.rejectKinh(data.sessionId);
+      // Build participants list with user info
+      const participants = await Promise.all(
+        challenge.participantIds.map(async (uid) => {
+          const u = await this.userService.findById(uid);
+          return {
+            userId: uid,
+            displayName: u.displayName || u.username,
+            avatarUrl: u.avatarUrl,
+          };
+        }),
+      );
 
-      // Notify the cheater
-      const cheaterSocketId = this.userSockets.get(claim.userId);
-      if (cheaterSocketId) {
-        this.server.to(cheaterSocketId).emit('kinh:rejected-you', {
-          reason: 'Kinh sai - bạn bị phạt!',
-        });
-      }
+      const timeoutSeconds = 30;
 
-      // Notify everyone else
-      this.server.to(`room:${client.currentRoomId}`).emit('kinh:rejected', {
-        userId: claim.userId,
+      this.server.to(`room:${roomId}`).emit('challenge:started', {
+        cardCount: 10,
+        participants,
+        timeoutSeconds,
       });
 
-      // Resume game
-      this.server.to(`room:${client.currentRoomId}`).emit('game:resumed');
+      // Start timeout timer
+      const timer = setTimeout(() => {
+        this.resolveChallengeTimeout(data.sessionId, roomId);
+      }, timeoutSeconds * 1000);
 
-      // Resume auto-call if applicable
-      if (room.callMode === 'auto') {
-        this.startAutoCall(data.sessionId, client.currentRoomId, room.autoCallInterval);
+      const state = this.gameService.getState(data.sessionId);
+      if (state.challenge) {
+        state.challenge.timeoutTimer = timer;
       }
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to reject kinh';
+      const message = error instanceof Error ? error.message : 'Failed to start challenge';
+      client.emit('error', { message });
+    }
+  }
+
+  @SubscribeMessage('challenge:pick-card')
+  async handleChallengePickCard(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { sessionId: number; cardIndex: number },
+  ) {
+    if (!client.userId || !client.currentRoomId) return;
+
+    try {
+      const { value, allPicked } = this.gameService.pickChallengeCard(
+        data.sessionId,
+        client.userId,
+        data.cardIndex,
+      );
+
+      const user = await this.userService.findById(client.userId);
+
+      // Broadcast card picked (no value) to room
+      this.server.to(`room:${client.currentRoomId}`).emit('challenge:card-picked', {
+        userId: client.userId,
+        displayName: user.displayName || user.username,
+        cardIndex: data.cardIndex,
+      });
+
+      // Send value privately to picker
+      client.emit('challenge:your-pick', {
+        cardIndex: data.cardIndex,
+        value,
+      });
+
+      if (allPicked) {
+        await this.resolveChallenge(data.sessionId, client.currentRoomId);
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to pick card';
       client.emit('error', { message });
     }
   }
@@ -710,10 +715,11 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const room = await this.roomService.findById(data.roomId);
     if (room.ownerId !== client.userId) return;
 
-    // Stop any auto-call timers for existing session
+    // Stop any auto-call timers and challenge timers for existing session
     const existing = this.gameService.findSessionForRoom(data.roomId);
     if (existing) {
       this.stopAutoCall(existing.sessionId);
+      this.gameService.clearChallengeTimer(existing.sessionId);
     }
 
     // Full reset: cleanup old session + create fresh one
@@ -828,6 +834,252 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (timer) {
       clearInterval(timer);
       this.autoCallTimers.delete(sessionId);
+    }
+  }
+
+  private async buildClaimsPayload(sessionId: number) {
+    const state = this.gameService.getState(sessionId);
+    const claims = await Promise.all(
+      state.kinhClaims.map(async (claim) => {
+        const user = await this.userService.findById(claim.userId);
+        const ticket = await this.ticketService.getTicketById(claim.ticketId);
+        const ticketRows = ticket ? [ticket.row1, ticket.row2, ticket.row3] : null;
+        const winningNumbers = this.extractWinningNumbers(ticketRows, claim.winType, claim.lineDetails);
+        return {
+          userId: claim.userId,
+          displayName: user.displayName || user.username,
+          avatarUrl: user.avatarUrl,
+          winType: claim.winType,
+          winningNumbers,
+          claimOrder: claim.claimOrder,
+        };
+      }),
+    );
+    return { claims };
+  }
+
+  private async buildVerifyPayloads(sessionId: number) {
+    const state = this.gameService.getState(sessionId);
+    const claims = await Promise.all(
+      state.kinhClaims.map(async (claim) => {
+        const user = await this.userService.findById(claim.userId);
+        const ticket = await this.ticketService.getTicketById(claim.ticketId);
+        const markedCells = ticket
+          ? await this.buildMarkedCellsForTicket(sessionId, claim.userId, ticket)
+          : [];
+        return {
+          userId: claim.userId,
+          displayName: user.displayName || user.username,
+          ticket: ticket
+            ? {
+                id: ticket.id,
+                ticketNumber: ticket.ticketNumber,
+                colorGroup: ticket.colorGroup,
+                rows: [ticket.row1, ticket.row2, ticket.row3],
+              }
+            : null,
+          markedCells,
+          calledNumbers: state.calledNumbers,
+          winType: claim.winType,
+          lineDetails: claim.lineDetails,
+          preValidated: claim.preValidated,
+        };
+      }),
+    );
+    return { claims };
+  }
+
+  private async buildMarkedCellsForTicket(
+    sessionId: number,
+    userId: number,
+    ticket: any,
+  ): Promise<{ ticketId: number; rowIndex: number; colIndex: number; numberValue: number }[]> {
+    const calledSet = new Set(this.gameService.getState(sessionId).calledNumbers);
+    const rows = [ticket.row1, ticket.row2, ticket.row3];
+    const result: { ticketId: number; rowIndex: number; colIndex: number; numberValue: number }[] = [];
+    for (let ri = 0; ri < rows.length; ri++) {
+      for (let ci = 0; ci < rows[ri].length; ci++) {
+        const cell = rows[ri][ci];
+        if (cell !== null && calledSet.has(cell)) {
+          result.push({ ticketId: ticket.id, rowIndex: ri, colIndex: ci, numberValue: cell });
+        }
+      }
+    }
+    return result;
+  }
+
+  private extractWinningNumbers(
+    ticketRows: ((number | null)[])[] | null,
+    winType: string,
+    lineDetails: LineDetails | null,
+  ): number[] {
+    if (!ticketRows || !lineDetails) return [];
+    const nums: number[] = [];
+    if (winType === 'horizontal' && lineDetails.rowIndex !== undefined) {
+      const row = ticketRows[lineDetails.rowIndex];
+      if (row) {
+        for (const cell of row) {
+          if (cell !== null && cell !== 0) nums.push(cell);
+        }
+      }
+    } else if (winType === 'vertical' && lineDetails.colIndex !== undefined) {
+      for (const row of ticketRows) {
+        if (row) {
+          const cell = row[lineDetails.colIndex!];
+          if (cell !== null && cell !== 0) nums.push(cell);
+        }
+      }
+    } else if (winType === 'diagonal') {
+      const startCol = lineDetails.startCol ?? 0;
+      const isMain = lineDetails.direction === 'main';
+      for (let r = 0; r < ticketRows.length; r++) {
+        const c = isMain ? startCol + r : startCol - r;
+        if (c >= 0 && c < (ticketRows[r]?.length ?? 0)) {
+          const cell = ticketRows[r][c];
+          if (cell !== null && cell !== 0) nums.push(cell);
+        }
+      }
+    }
+    return nums;
+  }
+
+  private async announceWinner(
+    sessionId: number,
+    winnerId: number,
+    roomId: number,
+    room: any,
+  ): Promise<void> {
+    const state = this.gameService.getState(sessionId);
+    const result = await this.gameService.approveKinhForUser(sessionId, winnerId);
+    await this.userService.incrementWinCount(winnerId);
+    const winner = await this.userService.findById(winnerId);
+    const payments = this.gameService.calculatePayments(
+      sessionId,
+      room.pricePerSheet,
+      winnerId,
+    );
+
+    const paymentReport: {
+      userId: number;
+      displayName: string;
+      avatarUrl: string | null;
+      sheetCount: number;
+      amount: number;
+    }[] = [];
+
+    const userSheetCounts = new Map<number, number>();
+    for (const [, userId] of state.purchasedSheets) {
+      userSheetCounts.set(userId, (userSheetCounts.get(userId) || 0) + 1);
+    }
+
+    for (const payment of payments) {
+      const paymentUser = await this.userService.findById(payment.userId);
+      paymentReport.push({
+        userId: payment.userId,
+        displayName: paymentUser.displayName || paymentUser.username,
+        avatarUrl: paymentUser.avatarUrl,
+        sheetCount: userSheetCounts.get(payment.userId) || 0,
+        amount: payment.amount,
+      });
+    }
+
+    const totalWinAmount = paymentReport.reduce((sum, p) => sum + p.amount, 0);
+    const winnerSocketId = this.userSockets.get(winnerId);
+
+    this.server.to(`room:${roomId}`).emit('kinh:winner-announcement', {
+      winnerId,
+      displayName: winner.displayName || winner.username,
+      avatarUrl: winner.avatarUrl,
+      qrCodeUrl: winner.qrCodeUrl,
+      winType: result.winType,
+      ticketId: result.winningTicketId,
+      paymentReport,
+      totalWinAmount,
+    });
+
+    if (winnerSocketId) {
+      this.server.to(winnerSocketId).emit('kinh:you-won', {
+        winType: result.winType,
+        ticketId: result.winningTicketId,
+      });
+    }
+
+    for (const payment of payments) {
+      const socketId = this.userSockets.get(payment.userId);
+      if (socketId) {
+        this.server.to(socketId).emit('payment:required', {
+          amount: payment.amount,
+          winnerId,
+          winnerDisplayName: winner.displayName || winner.username,
+          winnerQrCodeUrl: winner.qrCodeUrl,
+        });
+      }
+    }
+  }
+
+  private async resolveChallenge(sessionId: number, roomId: number): Promise<void> {
+    this.gameService.clearChallengeTimer(sessionId);
+    const { winnerId, picks, allCardValues } = this.gameService.resolveChallengeWinner(sessionId);
+
+    // Build picks with display names
+    const picksWithNames = await Promise.all(
+      picks.map(async (p) => {
+        const u = await this.userService.findById(p.userId);
+        return {
+          userId: p.userId,
+          displayName: u.displayName || u.username,
+          cardIndex: p.cardIndex,
+          value: p.value,
+        };
+      }),
+    );
+
+    const winnerUser = winnerId > 0 ? await this.userService.findById(winnerId) : null;
+
+    this.server.to(`room:${roomId}`).emit('challenge:result', {
+      winnerId,
+      winnerDisplayName: winnerUser ? (winnerUser.displayName || winnerUser.username) : '',
+      picks: picksWithNames,
+      allCardValues,
+    });
+
+    // Auto-approve winner after 4s delay
+    if (winnerId > 0) {
+      setTimeout(async () => {
+        try {
+          const room = await this.roomService.findById(roomId);
+          await this.announceWinner(sessionId, winnerId, roomId, room);
+        } catch (err) {
+          this.logger.error('Failed to auto-approve challenge winner', err);
+        }
+      }, 4000);
+    }
+  }
+
+  private async resolveChallengeTimeout(sessionId: number, roomId: number): Promise<void> {
+    try {
+      const state = this.gameService.getState(sessionId);
+      if (!state.challenge || state.challenge.status !== 'picking') return;
+
+      if (state.challenge.picks.size === 0) {
+        // No picks at all — return to verify mode
+        const abandonedCards = state.challenge.cards;
+        state.challenge = null;
+        const claimsPayload = await this.buildClaimsPayload(sessionId);
+        this.server.to(`room:${roomId}`).emit('challenge:result', {
+          winnerId: -1,
+          winnerDisplayName: '',
+          picks: [],
+          allCardValues: abandonedCards,
+        });
+        this.server.to(`room:${roomId}`).emit('kinh:claims-updated', claimsPayload);
+        return;
+      }
+
+      // Resolve with existing picks (non-pickers auto-lose)
+      await this.resolveChallenge(sessionId, roomId);
+    } catch (err) {
+      this.logger.error('Failed to resolve challenge timeout', err);
     }
   }
 

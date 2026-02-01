@@ -37,8 +37,8 @@ interface Player {
               @if (penalizedPlayers.has(mePlayer.userId)) {
                 <span class="penalty-badge">Phạt</span>
               }
-              @if (kinhClaimantId === mePlayer.userId) {
-                <span class="kinh-claim-badge">KINH - Đang Soát vé</span>
+              @if (kinhClaimantIds.includes(mePlayer.userId)) {
+                <span class="kinh-claim-badge">KINH - Đang soát vé</span>
               } @else if (nearWinPlayers.has(mePlayer.userId)) {
                 <span class="near-win-badge">Đang đợi x{{ nearWinPlayers.get(mePlayer.userId) }}</span>
               }
@@ -71,7 +71,7 @@ interface Player {
               @if (penalizedPlayers.has(player.userId)) {
                 <span class="penalty-badge">Phạt</span>
               }
-              @if (kinhClaimantId === player.userId) {
+              @if (kinhClaimantIds.includes(player.userId)) {
                 <span class="kinh-claim-badge">KINH - Đang soát vé</span>
               } @else if (nearWinPlayers.has(player.userId)) {
                 <span class="near-win-badge">Đang đợi x{{ nearWinPlayers.get(player.userId) }}</span>
@@ -231,7 +231,7 @@ export class PlayerListComponent {
   @Input() currentUserId: number | null = null;
   @Input() penalizedPlayers: Set<number> = new Set();
   @Input() nearWinPlayers: Map<number, number> = new Map();
-  @Input() kinhClaimantId: number | null = null;
+  @Input() kinhClaimantIds: number[] = [];
 
   get mePlayer(): Player | undefined {
     return this.players.find(p => p.userId === this.currentUserId);

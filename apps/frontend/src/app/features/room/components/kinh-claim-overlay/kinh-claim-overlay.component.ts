@@ -1,12 +1,6 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-
-export interface KinhClaimOverlayData {
-  displayName: string;
-  avatarUrl: string | null;
-  winType: string;
-  winningNumbers: number[];
-}
+import { KinhClaimOverlayItem } from '@loto/shared';
 
 @Component({
   selector: 'app-kinh-claim-overlay',
@@ -15,26 +9,58 @@ export interface KinhClaimOverlayData {
   template: `
     <div class="kinh-overlay-backdrop">
       <div class="kinh-overlay-card">
-        <div class="kinh-header">HÔ KINH!</div>
+        @if (claims.length === 1) {
+          <!-- Single claim -->
+          <div class="kinh-header">HO KINH!</div>
 
-        <div class="claimant-info">
-          <div class="claimant-avatar">
-            @if (data.avatarUrl) {
-              <img [src]="data.avatarUrl" [alt]="data.displayName" />
-            } @else {
-              <span>{{ data.displayName?.charAt(0)?.toUpperCase() || '?' }}</span>
+          <div class="claimant-info">
+            <div class="claimant-avatar">
+              @if (claims[0].avatarUrl) {
+                <img [src]="claims[0].avatarUrl" [alt]="claims[0].displayName" />
+              } @else {
+                <span>{{ claims[0].displayName?.charAt(0)?.toUpperCase() || '?' }}</span>
+              }
+            </div>
+            <div class="claimant-name">{{ claims[0].displayName }}</div>
+          </div>
+
+          <div class="win-type-label">{{ getWinTypeLabel(claims[0].winType) }}</div>
+
+          <div class="winning-numbers">
+            @for (num of claims[0].winningNumbers; track num) {
+              <span class="win-num">{{ num }}</span>
             }
           </div>
-          <div class="claimant-name">{{ data.displayName }}</div>
-        </div>
+        } @else {
+          <!-- Multiple claims -->
+          <div class="kinh-header">{{ claims.length }} NGƯỜI HÔ KINH!</div>
 
-        <div class="win-type-label">{{ winTypeLabel }}</div>
-
-        <div class="winning-numbers">
-          @for (num of data.winningNumbers; track num) {
-            <span class="win-num">{{ num }}</span>
-          }
-        </div>
+          <div class="multi-claims">
+            @for (claim of claims; track claim.userId) {
+              <div class="claim-entry">
+                <div class="claim-entry-top">
+                  <div class="claim-avatar">
+                    @if (claim.avatarUrl) {
+                      <img [src]="claim.avatarUrl" [alt]="claim.displayName" />
+                    } @else {
+                      <span>{{ claim.displayName?.charAt(0)?.toUpperCase() || '?' }}</span>
+                    }
+                  </div>
+                  <div class="claim-info">
+                    <span class="claim-name">{{ claim.displayName }}</span>
+                    <span class="claim-type">{{ getWinTypeLabel(claim.winType) }}</span>
+                  </div>
+                  <span class="claim-order">#{{ claim.claimOrder }}</span>
+                </div>
+                <div class="claim-numbers">
+                  @for (num of claim.winningNumbers; track num) {
+                    <span class="win-num-sm">{{ num }}</span>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
 
         <div class="waiting-text">
           <div class="waiting-spinner"></div>
@@ -60,8 +86,10 @@ export interface KinhClaimOverlayData {
       border-radius: 16px;
       padding: 28px 32px;
       text-align: center;
-      max-width: 360px;
+      max-width: 400px;
       width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
       box-shadow: 0 0 60px rgba(255, 107, 53, 0.3), 0 12px 40px rgba(0, 0, 0, 0.5);
       animation: scaleIn 0.3s ease-out;
     }
@@ -134,6 +162,82 @@ export interface KinhClaimOverlayData {
       justify-content: center;
       box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
     }
+
+    /* Multi-claims */
+    .multi-claims {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .claim-entry {
+      background: rgba(255, 107, 53, 0.08);
+      border: 1px solid rgba(255, 107, 53, 0.2);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .claim-entry-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .claim-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #3A3B3C;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      border: 2px solid #FF6B35;
+      flex-shrink: 0;
+    }
+    .claim-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .claim-avatar span { color: #E4E6EB; font-size: 16px; font-weight: 700; }
+    .claim-info {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      flex: 1;
+      min-width: 0;
+    }
+    .claim-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #E4E6EB;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
+    }
+    .claim-type { font-size: 11px; color: #B0B3B8; }
+    .claim-order {
+      font-size: 12px;
+      font-weight: 700;
+      color: #FF6B35;
+      flex-shrink: 0;
+    }
+    .claim-numbers {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      justify-content: center;
+    }
+    .win-num-sm {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #FF6B35, #FF8F00);
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
     .waiting-text {
       display: flex;
       align-items: center;
@@ -173,17 +277,18 @@ export interface KinhClaimOverlayData {
       .claimant-avatar { width: 52px; height: 52px; }
       .claimant-name { font-size: 16px; }
       .win-num { width: 34px; height: 34px; font-size: 14px; }
+      .win-num-sm { width: 26px; height: 26px; font-size: 11px; }
     }
   `],
 })
 export class KinhClaimOverlayComponent {
-  @Input({ required: true }) data!: KinhClaimOverlayData;
+  @Input() claims: KinhClaimOverlayItem[] = [];
 
-  get winTypeLabel(): string {
-    switch (this.data.winType) {
-      case 'horizontal': return 'Kinh hàng ngang ↔';
-      case 'vertical': return 'Kinh hàng dọc ↕';
-      case 'diagonal': return 'Kinh đường chéo ⤡';
+  getWinTypeLabel(type: string): string {
+    switch (type) {
+      case 'horizontal': return 'Kinh hàng ngang';
+      case 'vertical': return 'Kinh hàng dọc';
+      case 'diagonal': return 'Kinh đường chéo';
       default: return 'Kinh';
     }
   }

@@ -7,6 +7,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { AudioService } from '../../core/services/audio.service';
 import { checkAllWins, TicketData as SharedTicketData } from '@loto/shared';
 
+import { KinhClaimOverlayItem, KinhVerifyClaimItem, ChallengeParticipant, ChallengeResultPayload } from '@loto/shared';
 import { TicketDisplayComponent } from './components/ticket-display/ticket-display.component';
 import { SheetSelectorComponent } from './components/sheet-selector/sheet-selector.component';
 import { CalledNumbersHeaderComponent } from './components/called-numbers-header/called-numbers-header.component';
@@ -14,7 +15,8 @@ import { GameControlsComponent } from './components/game-controls/game-controls.
 import { KinhButtonComponent } from './components/kinh-button/kinh-button.component';
 import { WinnerOverlayComponent, PaymentReportItem } from './components/winner-overlay/winner-overlay.component';
 import { PlayerListComponent } from './components/player-list/player-list.component';
-import { KinhClaimOverlayComponent, KinhClaimOverlayData } from './components/kinh-claim-overlay/kinh-claim-overlay.component';
+import { KinhClaimOverlayComponent } from './components/kinh-claim-overlay/kinh-claim-overlay.component';
+import { ChallengeOverlayComponent } from './components/challenge-overlay/challenge-overlay.component';
 
 interface RoomData {
   id: number;
@@ -65,6 +67,7 @@ interface SheetInfo {
     WinnerOverlayComponent,
     PlayerListComponent,
     KinhClaimOverlayComponent,
+    ChallengeOverlayComponent,
   ],
   template: `
     <div class="room-container">
@@ -171,19 +174,21 @@ interface SheetInfo {
               </div>
             }
 
-            <!-- Owner Verify Ticket (when kinh is claimed) -->
-            @if (isOwner() && gameStatus() === 'paused_for_kinh' && verifyTicket()) {
-              <div class="verify-ticket-section">
-                <h3>Kiểm tra vé của người hô Kinh:</h3>
-                <app-ticket-display
-                  [ticket]="verifyTicket()!"
-                  [calledNumbers]="calledNumbers()"
-                  [markedCells]="verifyMarkedCells()"
-                  [interactive]="false"
-                  [winHighlightCells]="verifyWinCells()"
-                  (numberLookup)="onNumberLookup($event)">
-                </app-ticket-display>
-              </div>
+            <!-- Owner Verify Tickets (when kinh is claimed) -->
+            @if (isOwner() && gameStatus() === 'paused_for_kinh' && verifyClaims().length > 0) {
+              @for (vc of verifyClaims(); track vc.userId) {
+                <div class="verify-ticket-section">
+                  <h3>Vé của {{ vc.displayName }} ({{ vc.winType }}):</h3>
+                  <app-ticket-display
+                    [ticket]="vc.ticket"  
+                    [calledNumbers]="calledNumbers()"
+                    [markedCells]="buildVerifyMarkedCells(vc)"
+                    [interactive]="false"
+                    [winHighlightCells]="buildVerifyWinCells(vc)"
+                    (numberLookup)="onNumberLookup($event)">
+                  </app-ticket-display>
+                </div>
+              }
             }
 
             <!-- Owner Controls -->
@@ -193,12 +198,13 @@ interface SheetInfo {
                 [callMode]="room()?.callMode ?? 'auto'"
                 [autoCallEnabled]="autoCallEnabled()"
                 [autoCallInterval]="room()?.autoCallInterval ?? 5"
-                [kinhClaimant]="kinhClaimant()"
+                [kinhClaims]="verifyClaims()"
                 (startGame)="startGame()"
                 (callNumber)="callNumber()"
                 (toggleAutoCall)="onToggleAutoCall($event)"
-                (approveKinh)="approveKinh()"
-                (rejectKinh)="rejectKinh()"
+                (approveKinh)="approveKinh($event)"
+                (rejectKinh)="rejectKinh($event)"
+                (startChallenge)="startChallenge()"
                 (resetGame)="resetGame()"
                 (pauseGame)="pauseGame()"
                 (resumeGame)="resumeGame()">
@@ -225,33 +231,50 @@ interface SheetInfo {
             [currentUserId]="currentUserId()"
             [penalizedPlayers]="penalizedPlayersSet()"
             [nearWinPlayers]="nearWinPlayers()"
-            [kinhClaimantId]="kinhClaimantUserId()">
+            [kinhClaimantIds]="kinhClaimantUserIds()">
           </app-player-list>
         </div>
       }
 
-      <!-- Near-Win Toast -->
-      @if (nearWinToast()) {
-        <div class="near-win-toast">
-          <div class="near-win-toast-content">
-            <span class="near-win-avatar">
-              @if (nearWinToast()?.avatarUrl) {
-                <img [src]="nearWinToast()?.avatarUrl" alt="" />
-              } @else {
-                <span class="near-win-avatar-letter">{{ nearWinToast()?.displayName?.charAt(0)?.toUpperCase() || '?' }}</span>
-              }
-            </span>
-            <div class="near-win-text">
-              <strong>{{ nearWinToast()?.displayName }}</strong>
-              <span>Đang đợi KINH!</span>
+      <!-- Near-Win Toasts -->
+      @if (nearWinToasts().length > 0) {
+        <div class="near-win-toast-stack">
+          @for (toast of nearWinToasts(); track toast.id) {
+            <div class="near-win-toast">
+              <div class="near-win-toast-content">
+                <span class="near-win-avatar">
+                  @if (toast.avatarUrl) {
+                    <img [src]="toast.avatarUrl" alt="" />
+                  } @else {
+                    <span class="near-win-avatar-letter">{{ toast.displayName?.charAt(0)?.toUpperCase() || '?' }}</span>
+                  }
+                </span>
+                <div class="near-win-text">
+                  <strong>{{ toast.displayName }}</strong>
+                  <span>Đang đợi KINH!</span>
+                </div>
+              </div>
             </div>
-          </div>
+          }
         </div>
       }
 
       <!-- Kinh Claim Overlay (non-owner players) -->
-      @if (kinhClaimOverlay() && !isOwner()) {
-        <app-kinh-claim-overlay [data]="kinhClaimOverlay()!"></app-kinh-claim-overlay>
+      @if (kinhClaims().length > 0 && !isOwner() && !challengeActive()) {
+        <app-kinh-claim-overlay [claims]="kinhClaims()"></app-kinh-claim-overlay>
+      }
+
+      <!-- Challenge Overlay -->
+      @if (challengeActive()) {
+        <app-challenge-overlay
+          [cards]="challengeCards()"
+          [participants]="challengeParticipants()"
+          [myPick]="challengeMyPick()"
+          [result]="challengeResult()"
+          [isParticipant]="isChallengeParticipant()"
+          [timeoutSeconds]="challengeTimeoutSeconds()"
+          (cardPicked)="onChallengeCardPicked($event)">
+        </app-challenge-overlay>
       }
 
       <!-- Winner Overlay -->
@@ -457,7 +480,7 @@ interface SheetInfo {
     }
     .waiting-message p { font-size: 16px; }
 
-    .near-win-toast {
+    .near-win-toast-stack {
       position: fixed;
       top: 80px;
       left: 50%;
@@ -465,7 +488,12 @@ interface SheetInfo {
       z-index: 1000;
       width: 90%;
       max-width: 320px;
-      animation: toastSlideIn 0.3s ease-out, toastFadeOut 0.3s ease-in 1.7s forwards;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .near-win-toast {
+      animation: toastSlideIn 0.3s ease-out, toastFadeOut 0.3s ease-in 2.7s forwards;
     }
     .near-win-toast-content {
       display: flex;
@@ -508,7 +536,7 @@ interface SheetInfo {
     }
 
     @media (max-width: 768px) {
-      .near-win-toast { top: 56px; }
+      .near-win-toast-stack { top: 56px; }
       .room-header {
         padding: 8px 12px;
         flex-wrap: wrap;
@@ -577,16 +605,25 @@ export class RoomComponent implements OnInit, OnDestroy {
 
   // Near-win (đang đợi) state: userId -> nearWinCount
   nearWinPlayers = signal<Map<number, number>>(new Map());
-  nearWinToast = signal<{ displayName: string; avatarUrl: string | null } | null>(null);
+  nearWinToasts = signal<{ id: number; displayName: string; avatarUrl: string | null }[]>([]);
+  private nearWinToastId = 0;
 
-  // Kinh / Winner state
-  kinhClaimant = signal<{ displayName: string; winType: string } | null>(null);
-  kinhClaimantUserId = signal<number | null>(null);
-  kinhClaimOverlay = signal<KinhClaimOverlayData | null>(null);
-  verifyTicket = signal<TicketData | null>(null);
-  verifyMarkedCells = signal<Set<string>>(new Set());
-  verifyWinCells = signal<Set<string>>(new Set());
+  // Kinh / Winner state (multi-claim)
+  kinhClaimantUserIds = signal<number[]>([]);
+  kinhClaims = signal<KinhClaimOverlayItem[]>([]);
+  verifyClaims = signal<KinhVerifyClaimItem[]>([]);
   highlightCalledNumber = signal<number | null>(null);
+
+  // Challenge state
+  challengeActive = signal(false);
+  challengeCards = signal<{ picked: boolean; pickedBy: string | null; pickedByAvatar: string | null }[]>([]);
+  challengeParticipants = signal<ChallengeParticipant[]>([]);
+  challengeMyPick = signal<{ cardIndex: number; value: number } | null>(null);
+  challengeResult = signal<ChallengeResultPayload | null>(null);
+  challengeTimeoutSeconds = signal(30);
+  isChallengeParticipant = computed(() => {
+    return this.challengeParticipants().some(p => p.userId === this.currentUserId());
+  });
   winnerInfo = signal<{
     displayName: string;
     avatarUrl: string | null;
@@ -668,6 +705,16 @@ export class RoomComponent implements OnInit, OnDestroy {
           this.extractMyTickets(data.sheets, map);
         }
 
+        // Clear stale kinh/challenge state on (re)join
+        this.kinhClaimantUserIds.set([]);
+        this.kinhClaims.set([]);
+        this.verifyClaims.set([]);
+        this.challengeActive.set(false);
+        this.challengeCards.set([]);
+        this.challengeParticipants.set([]);
+        this.challengeMyPick.set(null);
+        this.challengeResult.set(null);
+
         if (data.session) {
           this.sessionId.set(data.session.id);
           this.gameStatus.set(data.session.status);
@@ -733,8 +780,11 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.lastCalledNumber.set(null);
         this.markedCells.set(new Set());
         this.nearWinPlayers.set(new Map());
-        this.nearWinToast.set(null);
-        this.kinhClaimantUserId.set(null);
+        this.nearWinToasts.set([]);
+        this.kinhClaimantUserIds.set([]);
+        this.kinhClaims.set([]);
+        this.verifyClaims.set([]);
+        this.challengeActive.set(false);
         // Sync auto-call checkbox with room's callMode
         this.autoCallEnabled.set(this.room()?.callMode === 'auto');
         this.audioService.play('start');
@@ -781,96 +831,33 @@ export class RoomComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
         this.gameStatus.set('active');
-        this.kinhClaimant.set(null);
-        this.kinhClaimantUserId.set(null);
-        this.kinhClaimOverlay.set(null);
-        this.verifyTicket.set(null);
+        this.kinhClaimantUserIds.set([]);
+        this.kinhClaims.set([]);
+        this.verifyClaims.set([]);
         this.highlightCalledNumber.set(null);
+        this.challengeActive.set(false);
+        this.challengeCards.set([]);
+        this.challengeParticipants.set([]);
+        this.challengeMyPick.set(null);
+        this.challengeResult.set(null);
       });
 
-    // Kinh claimed
+    // Kinh claims updated (multi-claim)
     this.socketService
-      .on<{
-        userId: number;
-        displayName: string;
-        avatarUrl: string | null;
-        winType: string;
-        lineDetails: { rowIndex?: number; colIndex?: number; direction?: string; startCol?: number } | null;
-        ticketRows: ((number | null)[])[] | null;
-      }>('kinh:claimed')
+      .on<{ claims: KinhClaimOverlayItem[] }>('kinh:claims-updated')
       .pipe(takeUntil(this.destroy$))
       .subscribe((data) => {
-        this.kinhClaimant.set({ displayName: data.displayName, winType: data.winType });
-        this.kinhClaimantUserId.set(data.userId);
-
-        // Build overlay data for non-owner players
-        const winningNumbers = this.extractWinningNumbers(
-          data.ticketRows,
-          data.winType,
-          data.lineDetails,
-        );
-        this.kinhClaimOverlay.set({
-          displayName: data.displayName,
-          avatarUrl: data.avatarUrl,
-          winType: data.winType,
-          winningNumbers,
-        });
-
+        this.kinhClaims.set(data.claims);
+        this.kinhClaimantUserIds.set(data.claims.map(c => c.userId));
         this.audioService.play('kinh');
       });
 
-    // Kinh verify request (owner only)
+    // Kinh verify request (owner only) — array of claims
     this.socketService
-      .on<{
-        userId: number;
-        displayName: string;
-        ticketId: number;
-        ticket: TicketData;
-        winType: string;
-        lineDetails: any;
-        calledNumbers: number[];
-        preValidated: boolean;
-      }>('kinh:verify-request')
+      .on<{ claims: KinhVerifyClaimItem[] }>('kinh:verify-request')
       .pipe(takeUntil(this.destroy$))
       .subscribe((data) => {
-        this.verifyTicket.set(data.ticket);
-
-        // Build marked cells from called numbers that appear on the ticket
-        const marked = new Set<string>();
-        if (data.ticket && data.calledNumbers) {
-          const calledSet = new Set(data.calledNumbers);
-          data.ticket.rows.forEach((row, ri) => {
-            row.forEach((cell, ci) => {
-              if (cell !== null && calledSet.has(cell)) {
-                marked.add(`${data.ticket.id}:${ri}:${ci}`);
-              }
-            });
-          });
-        }
-        this.verifyMarkedCells.set(marked);
-
-        // Build win highlight cells from lineDetails
-        const winCells = new Set<string>();
-        if (data.lineDetails && data.ticket) {
-          if (data.lineDetails.rowIndex !== undefined) {
-            // Horizontal win - highlight all non-null cells in the row
-            const row = data.ticket.rows[data.lineDetails.rowIndex];
-            if (row) {
-              row.forEach((cell, ci) => {
-                if (cell !== null) {
-                  winCells.add(`${data.ticket.id}:${data.lineDetails.rowIndex}:${ci}`);
-                }
-              });
-            }
-          }
-        }
-        this.verifyWinCells.set(winCells);
-
-        // Update kinhClaimant with preValidated info
-        this.kinhClaimant.set({
-          displayName: data.displayName,
-          winType: `${data.winType}${data.preValidated ? ' ✓' : ' ✗'}`,
-        });
+        this.verifyClaims.set(data.claims);
       });
 
     // Winner announcement
@@ -887,7 +874,10 @@ export class RoomComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe((data) => {
         this.gameStatus.set('finished');
-        this.kinhClaimOverlay.set(null);
+        this.kinhClaims.set([]);
+        this.kinhClaimantUserIds.set([]);
+        this.challengeActive.set(false);
+        this.challengeResult.set(null);
         this.winnerInfo.set({
           displayName: data.displayName,
           avatarUrl: data.avatarUrl,
@@ -960,9 +950,10 @@ export class RoomComponent implements OnInit, OnDestroy {
 
         // Show toast and play sound when count increases (new near-win lines detected)
         if (newCount > prevCount) {
-          this.nearWinToast.set({ displayName: data.displayName, avatarUrl: data.avatarUrl });
+          const toastId = ++this.nearWinToastId;
+          this.nearWinToasts.update((arr) => [...arr, { id: toastId, displayName: data.displayName, avatarUrl: data.avatarUrl }]);
           this.audioService.play('near-win');
-          setTimeout(() => this.nearWinToast.set(null), 2000);
+          setTimeout(() => this.nearWinToasts.update((arr) => arr.filter((t) => t.id !== toastId)), 3000);
         }
       });
 
@@ -978,19 +969,69 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.isPenalized.set(false);
         this.penalizedPlayersSet.set(new Set());
         this.nearWinPlayers.set(new Map());
-        this.nearWinToast.set(null);
+        this.nearWinToasts.set([]);
         this.winnerInfo.set(null);
         this.paymentAmount.set(null);
         this.markedCells.set(new Set());
         this.winHighlightCells.set(new Set());
         this.myTickets.set([]);
         this.takenSheets.set(new Map());
-        this.kinhClaimant.set(null);
-        this.kinhClaimantUserId.set(null);
-        this.kinhClaimOverlay.set(null);
-        this.verifyTicket.set(null);
+        this.kinhClaimantUserIds.set([]);
+        this.kinhClaims.set([]);
+        this.verifyClaims.set([]);
         this.highlightCalledNumber.set(null);
         this.autoCallEnabled.set(false);
+        this.challengeActive.set(false);
+        this.challengeCards.set([]);
+        this.challengeParticipants.set([]);
+        this.challengeMyPick.set(null);
+        this.challengeResult.set(null);
+      });
+
+    // Challenge started
+    this.socketService
+      .on<{ participants: ChallengeParticipant[]; cardCount: number; timeoutSeconds: number }>('challenge:started')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((data) => {
+        this.challengeActive.set(true);
+        this.challengeParticipants.set(data.participants);
+        this.challengeTimeoutSeconds.set(data.timeoutSeconds);
+        this.challengeMyPick.set(null);
+        this.challengeResult.set(null);
+        this.challengeCards.set(
+          Array.from({ length: data.cardCount }, () => ({ picked: false, pickedBy: null, pickedByAvatar: null }))
+        );
+        // Hide kinh overlay when challenge starts
+        this.kinhClaims.set([]);
+      });
+
+    // Challenge card picked by someone
+    this.socketService
+      .on<{ cardIndex: number; userId: number; displayName: string }>('challenge:card-picked')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((data) => {
+        const participant = this.challengeParticipants().find(p => p.userId === data.userId);
+        this.challengeCards.update((cards) => {
+          const updated = [...cards];
+          updated[data.cardIndex] = { picked: true, pickedBy: data.displayName, pickedByAvatar: participant?.avatarUrl ?? null };
+          return updated;
+        });
+      });
+
+    // Challenge your pick (value revealed to you)
+    this.socketService
+      .on<{ cardIndex: number; value: number }>('challenge:your-pick')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((data) => {
+        this.challengeMyPick.set({ cardIndex: data.cardIndex, value: data.value });
+      });
+
+    // Challenge result
+    this.socketService
+      .on<ChallengeResultPayload>('challenge:result')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((data) => {
+        this.challengeResult.set(data);
       });
 
     // Room dissolved (owner left)
@@ -1105,17 +1146,31 @@ export class RoomComponent implements OnInit, OnDestroy {
     }
   }
 
-  approveKinh() {
+  approveKinh(userId: number) {
     const sid = this.sessionId();
     if (sid) {
-      this.socketService.emit('kinh:approve', { sessionId: sid });
+      this.socketService.emit('kinh:approve', { sessionId: sid, userId });
     }
   }
 
-  rejectKinh() {
+  rejectKinh(userId: number) {
     const sid = this.sessionId();
     if (sid) {
-      this.socketService.emit('kinh:reject', { sessionId: sid });
+      this.socketService.emit('kinh:reject', { sessionId: sid, userId });
+    }
+  }
+
+  startChallenge() {
+    const sid = this.sessionId();
+    if (sid) {
+      this.socketService.emit('kinh:start-challenge', { sessionId: sid });
+    }
+  }
+
+  onChallengeCardPicked(cardIndex: number) {
+    const sid = this.sessionId();
+    if (sid) {
+      this.socketService.emit('challenge:pick-card', { sessionId: sid, cardIndex });
     }
   }
 
@@ -1243,43 +1298,52 @@ export class RoomComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Extract winning line numbers from ticket rows based on winType and lineDetails.
-   */
-  private extractWinningNumbers(
-    ticketRows: ((number | null)[])[] | null,
-    winType: string,
-    lineDetails: { rowIndex?: number; colIndex?: number; direction?: string; startCol?: number } | null,
-  ): number[] {
-    if (!ticketRows || !lineDetails) return [];
+  buildVerifyMarkedCells(vc: KinhVerifyClaimItem): Set<string> {
+    const marked = new Set<string>();
+    if (!vc.ticket) return marked;
+    const calledSet = new Set(this.calledNumbers());
+    vc.ticket.rows.forEach((row: (number | null)[], ri: number) => {
+      row.forEach((cell: number | null, ci: number) => {
+        if (cell !== null && calledSet.has(cell)) {
+          marked.add(`${vc.ticket.id}:${ri}:${ci}`);
+        }
+      });
+    });
+    return marked;
+  }
 
-    const nums: number[] = [];
-    if (winType === 'horizontal' && lineDetails.rowIndex !== undefined) {
-      const row = ticketRows[lineDetails.rowIndex];
+  buildVerifyWinCells(vc: KinhVerifyClaimItem): Set<string> {
+    const winCells = new Set<string>();
+    if (!vc.ticket || !vc.lineDetails) return winCells;
+    const ld = vc.lineDetails;
+    const ticket = vc.ticket;
+
+    if (vc.winType === 'horizontal' && ld.rowIndex !== undefined) {
+      const row = ticket.rows[ld.rowIndex];
       if (row) {
-        for (const cell of row) {
-          if (cell !== null && cell !== 0) nums.push(cell);
-        }
+        row.forEach((cell: number | null, ci: number) => {
+          if (cell !== null) {
+            winCells.add(`${ticket.id}:${ld.rowIndex}:${ci}`);
+          }
+        });
       }
-    } else if (winType === 'vertical' && lineDetails.colIndex !== undefined) {
-      for (const row of ticketRows) {
-        if (row) {
-          const cell = row[lineDetails.colIndex!];
-          if (cell !== null && cell !== 0) nums.push(cell);
+    } else if (vc.winType === 'vertical' && ld.colIndex !== undefined) {
+      ticket.rows.forEach((row: (number | null)[], ri: number) => {
+        if (row && row[ld.colIndex!] !== null) {
+          winCells.add(`${ticket.id}:${ri}:${ld.colIndex}`);
         }
-      }
-    } else if (winType === 'diagonal') {
-      const startCol = lineDetails.startCol ?? 0;
-      const isMain = lineDetails.direction === 'main';
-      for (let r = 0; r < ticketRows.length; r++) {
+      });
+    } else if (vc.winType === 'diagonal') {
+      const startCol = ld.startCol ?? 0;
+      const isMain = ld.direction === 'main';
+      ticket.rows.forEach((row: (number | null)[], r: number) => {
         const c = isMain ? startCol + r : startCol - r;
-        if (c >= 0 && c < (ticketRows[r]?.length ?? 0)) {
-          const cell = ticketRows[r][c];
-          if (cell !== null && cell !== 0) nums.push(cell);
+        if (c >= 0 && c < (row?.length ?? 0) && row[c] !== null) {
+          winCells.add(`${ticket.id}:${r}:${c}`);
         }
-      }
+      });
     }
-    return nums;
+    return winCells;
   }
 
   leaveRoom() {

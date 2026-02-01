@@ -78,3 +78,70 @@ export interface GameResultData {
   winType: WinType;
   ticketId: number;
 }
+
+// Multi-KINH claim types
+export interface KinhClaimOverlayItem {
+  userId: number;
+  displayName: string;
+  avatarUrl: string | null;
+  winType: WinType;
+  winningNumbers: number[];
+  claimOrder: number;
+}
+
+export interface KinhClaimsUpdatedPayload {
+  claims: KinhClaimOverlayItem[];
+}
+
+export interface KinhVerifyClaimItem {
+  userId: number;
+  displayName: string;
+  ticket: TicketData;
+  markedCells: MarkedCell[];
+  calledNumbers: number[];
+  winType: WinType;
+  lineDetails: LineDetails;
+  preValidated: boolean;
+}
+
+export interface KinhVerifyRequestPayload {
+  claims: KinhVerifyClaimItem[];
+}
+
+// Challenge (card mini-game) types
+export interface ChallengeParticipant {
+  userId: number;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+export interface ChallengeStartedPayload {
+  cardCount: number;
+  participants: ChallengeParticipant[];
+  timeoutSeconds: number;
+}
+
+export interface ChallengeCardPickedPayload {
+  userId: number;
+  displayName: string;
+  cardIndex: number;
+}
+
+export interface ChallengeYourPickPayload {
+  cardIndex: number;
+  value: number;
+}
+
+export interface ChallengePickInfo {
+  userId: number;
+  displayName: string;
+  cardIndex: number;
+  value: number;
+}
+
+export interface ChallengeResultPayload {
+  winnerId: number;
+  winnerDisplayName: string;
+  picks: ChallengePickInfo[];
+  allCardValues: number[];
+}

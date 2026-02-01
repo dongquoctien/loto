@@ -525,6 +525,31 @@ export const FIXED_TICKETS: TicketData[] = [
       [null, 14, 23, null, null, 56, 68, null, 81],
     ],
   },
+  // Sheet 21 (tickets 61-62-63) — clone of sheet 20 for testing
+  {
+    id: 61, ticketNumber: 61, colorGroup: 'brown',
+    rows: [
+      [1, null, 24, null, 45, 52, null, 73, null],
+      [8, null, null, 34, 47, null, 61, null, 82],
+      [null, 15, null, 38, 48, null, 63, null, 87],
+    ],
+  },
+  {
+    id: 62, ticketNumber: 62, colorGroup: 'brown',
+    rows: [
+      [1, 10, null, 31, null, 54, null, 79, null],
+      [6, null, 23, null, 43, 57, null, null, 82],
+      [null, 16, null, 37, 48, null, 64, null, 87],
+    ],
+  },
+  {
+    id: 63, ticketNumber: 63, colorGroup: 'brown',
+    rows: [
+      [9, null, 20, 31, null, 50, 66, null, null],
+      [null, 13, 22, null, 44, 51, null, 78, null],
+      [null, 14, 23, null, null, 56, 68, null, 81],
+    ],
+  },
 ];
 
 /**
