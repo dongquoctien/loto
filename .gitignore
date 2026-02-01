@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
 
 # Build output
 dist/
@@ -34,3 +33,4 @@ coverage/
 .tmp/
 temp/
 docs/DEPLOY.md
+.gitignore

@@ -143,7 +143,7 @@ interface ConfettiParticle {
       text-align: center;
       max-width: 420px;
       width: 90%;
-      max-height: 90vh;
+      /* max-height: 90vh; */
       overflow-y: auto;
       position: relative;
       z-index: 1;

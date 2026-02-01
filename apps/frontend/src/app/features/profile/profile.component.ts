@@ -214,19 +214,49 @@ import { ImageCropperComponent } from './image-cropper.component';
     }
     .skip-btn:hover { background: #F0F2F5; color: #1C1E21; }
 
-    @media (max-width: 420px) {
-      .profile-card { width: 100%; max-width: none; max-height: 100vh; border-radius: 0; }
-      .overlay { align-items: stretch; }
-      .modal-header { padding: 12px 16px; }
+    @media (max-width: 768px) {
+      .overlay { align-items: flex-end; }
+      .profile-card {
+        width: 100%;
+        max-width: none;
+        max-height: 92vh;
+        border-radius: 16px 16px 0 0;
+        animation: slideUpMobile 0.3s ease-out;
+      }
+      @keyframes slideUpMobile {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+      }
+      .profile-card::before {
+        content: '';
+        display: block;
+        width: 36px;
+        height: 4px;
+        background: #D8DADF;
+        border-radius: 2px;
+        margin: 8px auto 0;
+        flex-shrink: 0;
+      }
+      .modal-header {
+        padding: 8px 16px 12px;
+        position: sticky;
+        top: 0;
+        background: white;
+        z-index: 1;
+      }
       .modal-header h2 { font-size: 18px; }
       .avatar-section { padding: 16px 16px 0; }
-      .avatar, .avatar-placeholder { width: 72px; height: 72px; }
-      .avatar-placeholder { font-size: 28px; }
+      .avatar, .avatar-placeholder { width: 80px; height: 80px; }
+      .avatar-placeholder { font-size: 32px; }
       form { padding: 12px 16px 16px; }
+      .form-group input { font-size: 16px; padding: 12px; }
+      button[type="submit"] { padding: 14px; font-size: 16px; }
       .success-message, .error-message { margin: 12px 16px 0; }
-      .welcome-message { padding: 10px 16px; }
+      .welcome-message { padding: 10px 16px; font-size: 13px; }
       .skip-section { padding: 0 16px 12px; }
-      .qr-image { max-width: 140px; }
+      .skip-btn { padding: 12px 16px; font-size: 15px; }
+      .qr-image { max-width: 160px; }
+      .upload-btn { padding: 10px 16px; font-size: 15px; }
     }
   `],
 })

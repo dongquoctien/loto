@@ -223,6 +223,12 @@ interface Player {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.2; }
     }
+    @media (max-width: 768px) {
+      .player-sidebar {
+        width: 100%;
+        border-left: none;
+      }
+    }
   `],
 })
 export class PlayerListComponent {

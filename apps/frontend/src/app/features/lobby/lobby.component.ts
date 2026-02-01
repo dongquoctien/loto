@@ -171,7 +171,7 @@ interface Room {
     .mobile-menu { display: none; position: relative; }
     .mobile-user-btn { background: none; border: none; padding: 4px 8px; cursor: pointer; border-radius: 6px; transition: background 0.2s; display: flex; align-items: center; gap: 8px; color: white; }
     .mobile-user-btn:hover { background: rgba(255,255,255,0.2); }
-    .mobile-display-name { font-size: 14px; font-weight: 600; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mobile-display-name { font-size: 14px; font-weight: 600; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dropdown-arrow { font-size: 12px; opacity: 0.8; }
     .dropdown-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 99; }
     .dropdown-menu {
@@ -211,7 +211,7 @@ interface Room {
     .win-rules { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 4px; }
     .checkbox-label { display: flex; align-items: center; gap: 6px; color: #606770; font-size: 14px; cursor: pointer; }
     .checkbox-label input[type="checkbox"] { width: 18px; height: 18px; }
-    @media (max-width: 420px) {
+    @media (max-width: 768px) {
       .join-form { flex-direction: column; }
       .join-form button { width: 100%; }
       .desktop-only { display: none !important; }

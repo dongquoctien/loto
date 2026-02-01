@@ -174,10 +174,46 @@ import { CommonModule } from '@angular/common';
     }
     .btn-confirm:hover { background: #166FE5; }
 
-    @media (max-width: 420px) {
-      .cropper-header { padding: 12px 16px; }
+    @media (max-width: 768px) {
+      .cropper-overlay { align-items: flex-end; }
+      .cropper-modal {
+        width: 100%;
+        max-width: none;
+        max-height: 92vh;
+        border-radius: 16px 16px 0 0;
+        animation: slideUpCropper 0.3s ease-out;
+      }
+      @keyframes slideUpCropper {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+      }
+      .cropper-header {
+        padding: 12px 16px;
+        position: sticky;
+        top: 0;
+        background: white;
+        z-index: 1;
+        border-radius: 16px 16px 0 0;
+      }
+      .cropper-header::before {
+        content: '';
+        display: block;
+        width: 36px;
+        height: 4px;
+        background: #D8DADF;
+        border-radius: 2px;
+        margin: 0 auto 8px;
+      }
       .cropper-body { padding: 12px; }
-      .cropper-footer { padding: 12px 16px; }
+      .cropper-footer {
+        padding: 12px 16px;
+        padding-bottom: max(12px, env(safe-area-inset-bottom));
+      }
+      .btn-cancel, .btn-confirm {
+        flex: 1;
+        padding: 12px;
+        font-size: 15px;
+      }
     }
   `],
 })

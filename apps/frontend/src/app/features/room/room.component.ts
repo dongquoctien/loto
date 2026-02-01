@@ -81,7 +81,12 @@ interface SheetInfo {
         <header class="room-header">
           <div class="room-title">
             <h2>{{ room()?.name }}</h2>
-            <span class="room-code">{{ room()?.roomCode }}</span>
+            <span class="room-code" (click)="copyRoomCode()" title="Bấm để sao chép">
+              {{ room()?.roomCode }}
+              @if (copiedRoomCode()) {
+                <span class="copied-tooltip">Copied!</span>
+              }
+            </span>
             <span class="price-badge">{{ room()?.pricePerSheet | number:'1.0-0' }}đ/tờ</span>
           </div>
           <div class="room-actions">
@@ -155,17 +160,19 @@ interface SheetInfo {
               </div>
             }
 
-            <!-- Kinh Button -->
+            <!-- Kinh Button (desktop inline) -->
             @if (gameStatus() === 'active' && !isPenalized() && myTickets().length > 0) {
-              <app-kinh-button
-                [ownedTickets]="myTickets()"
-                [calledNumbers]="calledNumbers()"
-                [markedCells]="markedCells()"
-                [winHorizontal]="room()?.winHorizontal ?? true"
-                [winVertical]="room()?.winVertical ?? false"
-                [winDiagonal]="room()?.winDiagonal ?? false"
-                (kinhClaimed)="onKinhClaimed($event)">
-              </app-kinh-button>
+              <div class="inline-kinh">
+                <app-kinh-button
+                  [ownedTickets]="myTickets()"
+                  [calledNumbers]="calledNumbers()"
+                  [markedCells]="markedCells()"
+                  [winHorizontal]="room()?.winHorizontal ?? true"
+                  [winVertical]="room()?.winVertical ?? false"
+                  [winDiagonal]="room()?.winDiagonal ?? false"
+                  (kinhClaimed)="onKinhClaimed($event)">
+                </app-kinh-button>
+              </div>
             }
 
             @if (isPenalized()) {
@@ -178,7 +185,7 @@ interface SheetInfo {
             @if (isOwner() && gameStatus() === 'paused_for_kinh' && verifyClaims().length > 0) {
               @for (vc of verifyClaims(); track vc.userId) {
                 <div class="verify-ticket-section">
-                  <h3>Vé của {{ vc.displayName }} ({{ vc.winType }}):</h3>
+                  <h3>Vé của {{ vc.displayName }} ({{ getWinTypeLabel(vc.winType) }}):</h3>
                   <app-ticket-display
                     [ticket]="vc.ticket"  
                     [calledNumbers]="calledNumbers()"
@@ -191,8 +198,127 @@ interface SheetInfo {
               }
             }
 
-            <!-- Owner Controls -->
+            <!-- Owner Controls (desktop inline) -->
             @if (isOwner()) {
+              <div class="inline-controls">
+                <app-game-controls
+                  [gameStatus]="gameStatus()"
+                  [callMode]="room()?.callMode ?? 'auto'"
+                  [autoCallEnabled]="autoCallEnabled()"
+                  [autoCallInterval]="room()?.autoCallInterval ?? 5"
+                  [kinhClaims]="verifyClaims()"
+                  (startGame)="startGame()"
+                  (callNumber)="callNumber()"
+                  (toggleAutoCall)="onToggleAutoCall($event)"
+                  (approveKinh)="approveKinh($event)"
+                  (rejectKinh)="rejectKinh($event)"
+                  (startChallenge)="startChallenge()"
+                  (resetGame)="resetGame()"
+                  (pauseGame)="pauseGame()"
+                  (resumeGame)="resumeGame()">
+                </app-game-controls>
+              </div>
+            }
+
+            @if (gameStatus() === 'paused' && !isOwner()) {
+              <div class="pause-notice">
+                ⏸ Game đang tạm dừng. Đợi chủ phòng tiếp tục...
+              </div>
+            }
+
+            <!-- Idle / status states for non-owners -->
+            @if (!isOwner()) {
+              @if (!sessionId()) {
+                <div class="idle-state">
+                  <div class="idle-icon">🎲</div>
+                  <h3 class="idle-title">Sẵn Sàng Chơi</h3>
+                  <p class="idle-text">Đợi chủ phòng bắt đầu ván mới...</p>
+                  <div class="idle-hint">Khi ván bắt đầu, bạn sẽ chọn tờ vé và tham gia ngay!</div>
+                </div>
+              } @else if (gameStatus() === 'finished') {
+                @if (myTickets().length === 0) {
+                  <div class="idle-state">
+                    <div class="idle-icon">🏁</div>
+                    <h3 class="idle-title">Ván Đã Kết Thúc</h3>
+                    <p class="idle-text">Đợi chủ phòng bắt đầu ván mới...</p>
+                    <div class="idle-hint">Vui lòng chờ trong giây lát, ván mới sẽ bắt đầu sớm thôi!</div>
+                  </div>
+                } @else {
+                  <div class="finished-banner">
+                    🏁 Ván đã kết thúc — Đợi chủ phòng bắt đầu ván mới...
+                  </div>
+                }
+              } @else if (gameStatus() !== 'preparing' && myTickets().length === 0) {
+                <div class="idle-state">
+                  <div class="idle-icon">👀</div>
+                  <h3 class="idle-title">Đang Theo Dõi</h3>
+                  <p class="idle-text">Ván đang diễn ra, bạn chưa có vé.</p>
+                  <div class="idle-hint">Hãy đợi ván tiếp theo để mua vé và tham gia nhé!</div>
+                </div>
+              }
+            }
+          </div>
+
+          <!-- Player List (desktop only) -->
+          <div class="desktop-player-list">
+            <app-player-list
+              [players]="players()"
+              [ownerId]="room()?.ownerId ?? null"
+              [currentUserId]="currentUserId()"
+              [penalizedPlayers]="penalizedPlayersSet()"
+              [nearWinPlayers]="nearWinPlayers()"
+              [kinhClaimantIds]="kinhClaimantUserIds()">
+            </app-player-list>
+          </div>
+        </div>
+
+        <!-- Mobile Bottom Bar -->
+        <div class="mobile-bottom-bar">
+          <button class="bar-btn" (click)="openSheet('players')">
+            <span class="bar-icon">👥</span>
+            <span class="bar-label">{{ players().length }}</span>
+          </button>
+          @if (gameStatus() === 'active' && !isPenalized() && myTickets().length > 0) {
+            <div class="bar-kinh">
+              <app-kinh-button
+                [ownedTickets]="myTickets()"
+                [calledNumbers]="calledNumbers()"
+                [markedCells]="markedCells()"
+                [winHorizontal]="room()?.winHorizontal ?? true"
+                [winVertical]="room()?.winVertical ?? false"
+                [winDiagonal]="room()?.winDiagonal ?? false"
+                (kinhClaimed)="onKinhClaimed($event)">
+              </app-kinh-button>
+            </div>
+          }
+          @if (isOwner()) {
+            <button class="bar-btn" (click)="openSheet('controls')">
+              <span class="bar-icon">⚙️</span>
+              <span class="bar-label">Quản lý</span>
+            </button>
+          }
+        </div>
+
+        <!-- Player Sheet (mobile) -->
+        <div class="sheet-backdrop" [class.open]="showPlayerSheet()" (click)="showPlayerSheet.set(false)">
+          <div class="sheet-panel" (click)="$event.stopPropagation()">
+            <div class="sheet-handle"></div>
+            <app-player-list
+              [players]="players()"
+              [ownerId]="room()?.ownerId ?? null"
+              [currentUserId]="currentUserId()"
+              [penalizedPlayers]="penalizedPlayersSet()"
+              [nearWinPlayers]="nearWinPlayers()"
+              [kinhClaimantIds]="kinhClaimantUserIds()">
+            </app-player-list>
+          </div>
+        </div>
+
+        <!-- Controls Sheet (mobile, owner only) -->
+        @if (isOwner()) {
+          <div class="sheet-backdrop" [class.open]="showControlsSheet()" (click)="showControlsSheet.set(false)">
+            <div class="sheet-panel" (click)="$event.stopPropagation()">
+              <div class="sheet-handle"></div>
               <app-game-controls
                 [gameStatus]="gameStatus()"
                 [callMode]="room()?.callMode ?? 'auto'"
@@ -209,31 +335,9 @@ interface SheetInfo {
                 (pauseGame)="pauseGame()"
                 (resumeGame)="resumeGame()">
               </app-game-controls>
-            }
-
-            @if (gameStatus() === 'paused' && !isOwner()) {
-              <div class="pause-notice">
-                ⏸ Game đang tạm dừng. Đợi chủ phòng tiếp tục...
-              </div>
-            }
-
-            @if (!sessionId() && !isOwner()) {
-              <div class="waiting-message">
-                <p>Đợi chủ phòng bắt đầu game...</p>
-              </div>
-            }
+            </div>
           </div>
-
-          <!-- Player List -->
-          <app-player-list
-            [players]="players()"
-            [ownerId]="room()?.ownerId ?? null"
-            [currentUserId]="currentUserId()"
-            [penalizedPlayers]="penalizedPlayersSet()"
-            [nearWinPlayers]="nearWinPlayers()"
-            [kinhClaimantIds]="kinhClaimantUserIds()">
-          </app-player-list>
-        </div>
+        }
       }
 
       <!-- Near-Win Toasts -->
@@ -253,6 +357,9 @@ interface SheetInfo {
                   <strong>{{ toast.displayName }}</strong>
                   <span>Đang đợi KINH!</span>
                 </div>
+                <span class="near-win-count-sticker">
+                  <span class="sticker-x">x</span>{{ toast.nearWinCount }}
+                </span>
               </div>
             </div>
           }
@@ -339,6 +446,30 @@ interface SheetInfo {
       font-size: 12px;
       font-weight: 600;
       color: white;
+      cursor: pointer;
+      position: relative;
+      transition: background 0.2s;
+      user-select: none;
+    }
+    .room-code:active { background: #1565C0; }
+    .copied-tooltip {
+      position: absolute;
+      top: -28px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #00A400;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      white-space: nowrap;
+      animation: tooltipFade 1.5s ease-out forwards;
+      pointer-events: none;
+    }
+    @keyframes tooltipFade {
+      0% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      70% { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+      100% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
     }
     .price-badge {
       background: #00A400;
@@ -473,12 +604,52 @@ interface SheetInfo {
       font-size: 14px;
       text-align: center;
     }
-    .waiting-message {
+    .idle-state {
       text-align: center;
-      padding: 60px 20px;
+      padding: 48px 24px;
+      color: #E4E6EB;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .idle-icon {
+      font-size: 48px;
+      margin-bottom: 4px;
+      animation: idlePulse 2.5s ease-in-out infinite;
+    }
+    @keyframes idlePulse {
+      0%, 100% { transform: scale(1); opacity: 0.9; }
+      50% { transform: scale(1.08); opacity: 1; }
+    }
+    .idle-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #E4E6EB;
+    }
+    .idle-text {
+      margin: 0;
+      font-size: 15px;
       color: #B0B3B8;
     }
-    .waiting-message p { font-size: 16px; }
+    .idle-hint {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #65676B;
+      max-width: 280px;
+      line-height: 1.4;
+    }
+    .finished-banner {
+      background: rgba(100, 100, 100, 0.15);
+      border: 1px solid #3A3B3C;
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: #B0B3B8;
+      margin: 12px 0;
+      font-size: 14px;
+      text-align: center;
+    }
 
     .near-win-toast-stack {
       position: fixed;
@@ -526,6 +697,39 @@ interface SheetInfo {
     }
     .near-win-text strong { font-size: 14px; }
     .near-win-text span { font-size: 12px; opacity: 0.9; }
+    .near-win-count-sticker {
+      font-size: 28px;
+      font-weight: 900;
+      font-style: italic;
+      color: #FFD700;
+      text-shadow:
+        -2px -2px 0 #000,
+         2px -2px 0 #000,
+        -2px  2px 0 #000,
+         2px  2px 0 #000,
+         0 0 8px rgba(255, 215, 0, 0.6),
+         0 0 16px rgba(255, 165, 0, 0.3);
+      line-height: 1;
+      flex-shrink: 0;
+      margin-left: auto;
+      transform: rotate(-8deg) scale(1);
+      animation: stickerPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+    .sticker-x {
+      font-size: 18px;
+      color: #FFF;
+      text-shadow:
+        -1px -1px 0 #000,
+         1px -1px 0 #000,
+        -1px  1px 0 #000,
+         1px  1px 0 #000;
+      margin-right: 1px;
+    }
+    @keyframes stickerPop {
+      0% { transform: rotate(-8deg) scale(0); }
+      60% { transform: rotate(-8deg) scale(1.3); }
+      100% { transform: rotate(-8deg) scale(1); }
+    }
     @keyframes toastSlideIn {
       from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
       to { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -534,6 +738,122 @@ interface SheetInfo {
       from { opacity: 1; }
       to { opacity: 0; }
     }
+
+    /* Bottom Sheet shared styles */
+    .sheet-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+      display: none;
+    }
+    .sheet-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .sheet-panel {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #242526;
+      border-radius: 16px 16px 0 0;
+      max-height: 70vh;
+      overflow-y: auto;
+      transform: translateY(100%);
+      transition: transform 0.3s ease-out;
+      padding: 12px 16px calc(24px + 68px);
+    }
+    .sheet-backdrop.open .sheet-panel {
+      transform: translateY(0);
+    }
+    .sheet-handle {
+      width: 36px;
+      height: 4px;
+      background: #65676B;
+      border-radius: 2px;
+      margin: 0 auto 12px;
+    }
+    .sheet-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #E4E6EB;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+
+    /* Mobile Bottom Bar */
+    .mobile-bottom-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 250;
+      background: #242526;
+      border-top: 1px solid #3A3B3C;
+      display: none;
+      align-items: stretch;
+      padding: 6px 10px;
+      gap: 8px;
+      padding-bottom: max(6px, env(safe-area-inset-bottom));
+    }
+    .bar-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      background: #3A3B3C;
+      border: none;
+      border-radius: 12px;
+      padding: 8px 6px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+      min-height: 48px;
+    }
+    .bar-btn:active { background: #4E4F50; }
+    .bar-icon { font-size: 18px; line-height: 1; }
+    .bar-label {
+      font-size: 11px;
+      color: #B0B3B8;
+      font-weight: 600;
+    }
+    .bar-kinh {
+      flex: 2;
+      display: flex;
+      align-items: stretch;
+      min-height: 48px;
+    }
+    .bar-kinh ::ng-deep app-kinh-button {
+      display: flex;
+      width: 100%;
+    }
+    .bar-kinh ::ng-deep .kinh-wrapper {
+      width: 100%;
+      display: flex;
+      align-items: stretch;
+    }
+    .bar-kinh ::ng-deep .kinh-main-btn {
+      padding: 0 6px !important;
+      font-size: 15px !important;
+      letter-spacing: 3px !important;
+      width: 100%;
+      border-radius: 12px !important;
+      box-shadow: 0 2px 10px rgba(233, 69, 96, 0.4) !important;
+    }
+    .bar-kinh ::ng-deep .kinh-main-btn:hover:not(:disabled) {
+      transform: none !important;
+    }
+    .bar-kinh ::ng-deep .win-detected-info { display: none !important; }
+    .bar-kinh ::ng-deep .no-win-hint { display: none !important; }
+
+    /* Desktop: hide mobile elements */
+    .desktop-player-list { display: contents; }
 
     @media (max-width: 768px) {
       .near-win-toast-stack { top: 56px; }
@@ -562,13 +882,22 @@ interface SheetInfo {
       .leave-btn { padding: 4px 10px; font-size: 12px; white-space: nowrap; }
       .game-area { padding: 10px 12px; }
       .room-body { flex-direction: column; }
-    
-      :host ::ng-deep .player-sidebar {
-        width: 100% !important;
-        border-left: none !important;
-        border-top: 1px solid #3A3B3C;
-        max-height: 200px;
-      }
+
+      /* Tickets always visible inline */
+      .my-tickets { margin-bottom: 8px; }
+      .tickets-header h3 { font-size: 14px; }
+
+      /* Hide desktop-only elements */
+      .desktop-player-list { display: none; }
+      .inline-kinh { display: none; }
+      .inline-controls { display: none; }
+
+      /* Show bottom bar and sheets */
+      .mobile-bottom-bar { display: flex; }
+      .sheet-backdrop { display: block; }
+
+      /* Padding for fixed bottom bar */
+      .room-container { padding-bottom: 68px; }
     }
     @media (max-width: 500px) {
       .tickets-grid { grid-template-columns: 1fr !important; }
@@ -583,6 +912,11 @@ export class RoomComponent implements OnInit, OnDestroy {
   private socketService = inject(SocketService);
   private authService = inject(AuthService);
   private audioService = inject(AudioService);
+
+  // UI state (mobile)
+  copiedRoomCode = signal(false);
+  showPlayerSheet = signal(false);
+  showControlsSheet = signal(false);
 
   // Room state
   room = signal<RoomData | null>(null);
@@ -605,7 +939,7 @@ export class RoomComponent implements OnInit, OnDestroy {
 
   // Near-win (đang đợi) state: userId -> nearWinCount
   nearWinPlayers = signal<Map<number, number>>(new Map());
-  nearWinToasts = signal<{ id: number; displayName: string; avatarUrl: string | null }[]>([]);
+  nearWinToasts = signal<{ id: number; displayName: string; avatarUrl: string | null; nearWinCount: number }[]>([]);
   private nearWinToastId = 0;
 
   // Kinh / Winner state (multi-claim)
@@ -683,6 +1017,15 @@ export class RoomComponent implements OnInit, OnDestroy {
     const room = this.room();
     if (room) {
       this.socketService.emit('room:leave', { roomId: room.id });
+    }
+  }
+
+  getWinTypeLabel(type: string): string {
+    switch (type) {
+      case 'horizontal': return 'Hàng ngang';
+      case 'vertical': return 'Hàng dọc';
+      case 'diagonal': return 'Đường chéo';
+      default: return type;
     }
   }
 
@@ -951,7 +1294,7 @@ export class RoomComponent implements OnInit, OnDestroy {
         // Show toast and play sound when count increases (new near-win lines detected)
         if (newCount > prevCount) {
           const toastId = ++this.nearWinToastId;
-          this.nearWinToasts.update((arr) => [...arr, { id: toastId, displayName: data.displayName, avatarUrl: data.avatarUrl }]);
+          this.nearWinToasts.update((arr) => [...arr, { id: toastId, displayName: data.displayName, avatarUrl: data.avatarUrl, nearWinCount: newCount }]);
           this.audioService.play('near-win');
           setTimeout(() => this.nearWinToasts.update((arr) => arr.filter((t) => t.id !== toastId)), 3000);
         }
@@ -1199,6 +1542,25 @@ export class RoomComponent implements OnInit, OnDestroy {
     this.handsFreeMode.update((v) => !v);
   }
 
+  copyRoomCode() {
+    const code = this.room()?.roomCode;
+    if (code) {
+      navigator.clipboard.writeText(code);
+      this.copiedRoomCode.set(true);
+      setTimeout(() => this.copiedRoomCode.set(false), 1500);
+    }
+  }
+
+  openSheet(sheet: 'players' | 'controls') {
+    if (sheet === 'players') {
+      this.showControlsSheet.set(false);
+      this.showPlayerSheet.set(!this.showPlayerSheet());
+    } else {
+      this.showPlayerSheet.set(false);
+      this.showControlsSheet.set(!this.showControlsSheet());
+    }
+  }
+
   /**
    * Hands-free: auto-mark all cells matching the called number across all owned tickets.
    * After marking, check for a win and auto-claim KINH.
@@ -1365,13 +1727,14 @@ export class RoomComponent implements OnInit, OnDestroy {
 
   private updateMaxColumns() {
     const width = window.innerWidth;
-    if (width <= 500) {
+    if (width <= 768) {
+      // Mobile: single column for tickets
       this.maxColumns.set(1);
       this.ticketColumns.set(1);
       return;
     }
-    // Subtract sidebar (~200px) + padding (~40px) for game area width
-    const gameAreaWidth = width > 768 ? width - 240 : width - 40;
+    // Desktop: subtract sidebar (~200px) + padding (~40px) for game area width
+    const gameAreaWidth = width - 240;
     const max = Math.max(1, Math.floor(gameAreaWidth / 250));
     this.maxColumns.set(max);
     if (this.ticketColumns() > max) {
