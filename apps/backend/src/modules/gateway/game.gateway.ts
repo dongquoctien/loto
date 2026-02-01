@@ -7,6 +7,7 @@ import {
   ConnectedSocket,
   MessageBody,
 } from '@nestjs/websockets';
+import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { GameService } from '../game/game.service';
@@ -21,18 +22,30 @@ interface AuthenticatedSocket extends Socket {
   currentRoomId?: number;
 }
 
+// Grace period before notifying room about disconnect (allows reconnect)
+const DISCONNECT_GRACE_MS = 15_000;
+
 @WebSocketGateway({
   cors: {
     origin: '*',
   },
   namespace: '/game',
+  pingInterval: 10000,
+  pingTimeout: 15000,
+  transports: ['websocket', 'polling'],
 })
 export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
+  private readonly logger = new Logger(GameGateway.name);
+
   @WebSocketServer()
   server: Server;
 
   // Maps userId -> socketId for reconnection
   private userSockets = new Map<number, string>();
+  // Maps userId -> roomId (persists across reconnections)
+  private userRooms = new Map<number, number>();
+  // Maps userId -> disconnect timer (grace period)
+  private disconnectTimers = new Map<number, ReturnType<typeof setTimeout>>();
   // Maps sessionId -> active auto-call interval
   private autoCallTimers = new Map<number, ReturnType<typeof setInterval>>();
 
@@ -58,6 +71,15 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const payload = this.jwtService.verify(token);
       client.userId = payload.sub;
       client.username = payload.username;
+
+      // Cancel any pending disconnect grace period for this user
+      const pendingTimer = this.disconnectTimers.get(payload.sub);
+      if (pendingTimer) {
+        clearTimeout(pendingTimer);
+        this.disconnectTimers.delete(payload.sub);
+        this.logger.log(`User ${payload.sub} reconnected within grace period`);
+      }
+
       this.userSockets.set(payload.sub, client.id);
 
       client.emit('authenticated', { userId: payload.sub });
@@ -67,18 +89,33 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   handleDisconnect(client: AuthenticatedSocket) {
-    if (client.userId) {
-      this.userSockets.delete(client.userId);
+    if (!client.userId) return;
 
-      // Notify room about player going offline
-      if (client.currentRoomId) {
-        this.server
-          .to(`room:${client.currentRoomId}`)
-          .emit('room:player-left', {
-            userId: client.userId,
-          });
+    const userId = client.userId;
+    const currentSocketId = this.userSockets.get(userId);
+
+    // Only process if this is still the active socket for this user
+    // (avoids race condition when user reconnects before old socket closes)
+    if (currentSocketId !== client.id) return;
+
+    // Start grace period — don't immediately notify room
+    const timer = setTimeout(() => {
+      this.disconnectTimers.delete(userId);
+      this.userSockets.delete(userId);
+
+      // Notify room about player going offline after grace period
+      const roomId = this.userRooms.get(userId);
+      if (roomId) {
+        this.server.to(`room:${roomId}`).emit('room:player-left', {
+          userId,
+        });
+        // Keep userRooms mapping so rejoin can restore state
       }
-    }
+
+      this.logger.log(`User ${userId} disconnected (grace period expired)`);
+    }, DISCONNECT_GRACE_MS);
+
+    this.disconnectTimers.set(userId, timer);
   }
 
   @SubscribeMessage('room:join')
@@ -92,6 +129,9 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const room = await this.roomService.joinRoom(data.roomCode, client.userId);
       client.currentRoomId = room.id;
       client.join(`room:${room.id}`);
+
+      // Track user-room mapping for reconnection
+      this.userRooms.set(client.userId, room.id);
 
       // Get current game session state if any
       const user = await this.userService.findById(client.userId);
@@ -114,8 +154,12 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       let sessionData: { id: number; status: string; calledNumbers: number[] } | undefined;
       let purchasedSheetsMap: Record<string, number> | undefined;
 
-      // Find the latest active session for this room, or auto-create one
+      // Find the latest active session for this room, or recover from DB, or auto-create one
       let state = this.findActiveSessionForRoom(room.id);
+      if (!state) {
+        // Try recovering from DB (handles backend restart scenario)
+        state = await this.gameService.recoverSessionForRoom(room.id);
+      }
       if (!state) {
         // Auto-create a session in 'preparing' status so players can purchase sheets
         const session = await this.gameService.createSession(room.id);
@@ -193,11 +237,14 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         reason: 'Chủ phòng đã rời phòng. Phòng đã bị xóa.',
       });
 
-      // Force disconnect all sockets from the room
+      // Force disconnect all sockets from the room + cleanup userRooms
       const sockets = await this.server.in(`room:${data.roomId}`).fetchSockets();
       for (const sock of sockets) {
         sock.leave(`room:${data.roomId}`);
         (sock as any).currentRoomId = undefined;
+        if ((sock as any).userId) {
+          this.userRooms.delete((sock as any).userId);
+        }
       }
 
       // Delete room from DB
@@ -206,6 +253,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       await this.roomService.leaveRoom(data.roomId, client.userId);
       client.leave(`room:${data.roomId}`);
       client.currentRoomId = undefined;
+      this.userRooms.delete(client.userId);
 
       this.server.to(`room:${data.roomId}`).emit('room:player-left', {
         userId: client.userId,
@@ -236,7 +284,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
             }))
         : [];
 
-      // Notify all in room that sheet is taken
+      // Notify all in room that sheet is taken (including the buyer for confirmation)
       if (client.currentRoomId) {
         this.server.to(`room:${client.currentRoomId}`).emit('sheet:taken', {
           sheetId: data.sheetId,
@@ -244,8 +292,19 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
           tickets,
         });
       }
+
+      // Also send acknowledgment directly to the buyer
+      client.emit('sheet:purchase-confirmed', {
+        sheetId: data.sheetId,
+        success: true,
+      });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to purchase sheet';
+      client.emit('sheet:purchase-confirmed', {
+        sheetId: data.sheetId,
+        success: false,
+        error: message,
+      });
       client.emit('error', { message });
     }
   }
@@ -344,14 +403,22 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     if (!client.userId) return;
 
-    await this.gameService.markCell(
-      data.sessionId,
-      client.userId,
-      data.ticketId,
-      data.row,
-      data.col,
-      data.number,
-    );
+    try {
+      await this.gameService.markCell(
+        data.sessionId,
+        client.userId,
+        data.ticketId,
+        data.row,
+        data.col,
+        data.number,
+      );
+    } catch (error: unknown) {
+      // Silently ignore duplicate mark errors (user clicked twice)
+      if (error instanceof Error && error.message?.includes('ER_DUP_ENTRY')) {
+        return;
+      }
+      this.logger.error(`Failed to mark cell: ${error}`);
+    }
   }
 
   @SubscribeMessage('ticket:unmark-cell')
@@ -407,8 +474,11 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server.to(`room:${client.currentRoomId}`).emit('kinh:claimed', {
         userId: client.userId,
         displayName: user.displayName || user.username,
+        avatarUrl: user.avatarUrl,
         ticketId: data.ticketId,
         winType: data.winType,
+        lineDetails: data.lineDetails,
+        ticketRows: ticket ? [ticket.row1, ticket.row2, ticket.row3] : null,
       });
 
       // Send verification request to room owner
@@ -698,10 +768,8 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Skip penalized players
       if (state.penalizedPlayers.has(userId)) continue;
 
-      let foundNearWin = false;
+      let totalNearWinCount = 0;
       for (const sheetId of sheetIds) {
-        if (foundNearWin) break;
-
         const sheet = await this.ticketService.getSheetById(sheetId);
         if (!sheet) continue;
 
@@ -724,17 +792,18 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
           }
 
           const nearWins = checkNearWins(ticketData, effectiveSet, enabledWinTypes);
-          if (nearWins.length > 0) {
-            const user = await this.userService.findById(userId);
-            this.server.to(`room:${roomId}`).emit('player:near-win', {
-              userId,
-              displayName: user.displayName || user.username,
-              avatarUrl: user.avatarUrl,
-            });
-            foundNearWin = true;
-            break;
-          }
+          totalNearWinCount += nearWins.length;
         }
+      }
+
+      if (totalNearWinCount > 0) {
+        const user = await this.userService.findById(userId);
+        this.server.to(`room:${roomId}`).emit('player:near-win', {
+          userId,
+          displayName: user.displayName || user.username,
+          avatarUrl: user.avatarUrl,
+          nearWinCount: totalNearWinCount,
+        });
       }
     }
   }

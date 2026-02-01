@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 
-type SoundType = 'number-called' | 'kinh' | 'winner' | 'mark' | 'error' | 'join' | 'start';
+type SoundType = 'number-called' | 'kinh' | 'winner' | 'mark' | 'error' | 'join' | 'start' | 'near-win';
 
 @Injectable({ providedIn: 'root' })
 export class AudioService {
@@ -50,6 +50,9 @@ export class AudioService {
         case 'start':
           this.playSequence(ctx, [440, 550, 660], 0.15);
           break;
+        case 'near-win':
+          this.playNearWinAlert(ctx);
+          break;
       }
     } catch {
       // Audio not available
@@ -83,6 +86,59 @@ export class AudioService {
       osc.start(startTime);
       osc.stop(startTime + noteDuration);
     });
+  }
+
+  /**
+   * Suspenseful near-win alert: rapid ascending tones with tremolo
+   * to create excitement and tension.
+   */
+  private playNearWinAlert(ctx: AudioContext) {
+    const now = ctx.currentTime;
+
+    // Rising 3-note alert: D5 → F#5 → A5 (tension chord)
+    const notes = [
+      { freq: 587, start: 0, dur: 0.12 },
+      { freq: 740, start: 0.10, dur: 0.12 },
+      { freq: 880, start: 0.20, dur: 0.35 },
+    ];
+
+    for (const note of notes) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = note.freq;
+      const t = now + note.start;
+      gain.gain.setValueAtTime(0.18, t);
+      gain.gain.exponentialRampToValueAtTime(0.01, t + note.dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + note.dur + 0.01);
+    }
+
+    // Tremolo shimmer on the held note for suspense
+    const tremOsc = ctx.createOscillator();
+    const tremGain = ctx.createGain();
+    const lfo = ctx.createOscillator();
+    const lfoGain = ctx.createGain();
+
+    tremOsc.type = 'sine';
+    tremOsc.frequency.value = 880;
+    lfo.type = 'sine';
+    lfo.frequency.value = 12; // 12Hz tremolo
+    lfoGain.gain.value = 0.08;
+
+    lfo.connect(lfoGain);
+    lfoGain.connect(tremGain.gain);
+    tremGain.gain.setValueAtTime(0.12, now + 0.30);
+    tremGain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+    tremOsc.connect(tremGain);
+    tremGain.connect(ctx.destination);
+
+    tremOsc.start(now + 0.30);
+    lfo.start(now + 0.30);
+    tremOsc.stop(now + 0.66);
+    lfo.stop(now + 0.66);
   }
 
   /**

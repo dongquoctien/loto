@@ -82,7 +82,10 @@ import { CommonModule } from '@angular/common';
       border-radius: 12px;
       width: 90%;
       max-width: 420px;
+      max-height: 90vh;
       overflow: hidden;
+      display: flex;
+      flex-direction: column;
       box-shadow: 0 12px 28px rgba(0,0,0,0.3);
     }
     .cropper-header {
@@ -101,7 +104,7 @@ import { CommonModule } from '@angular/common';
     }
     .close-btn:hover { background: #D8DADF; }
 
-    .cropper-body { padding: 16px; }
+    .cropper-body { padding: 16px; flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 
     .canvas-wrapper {
       position: relative;
@@ -149,7 +152,6 @@ import { CommonModule } from '@angular/common';
     .zoom-btn:hover { background: #F0F2F5; }
     .zoom-slider {
       flex: 1;
-      accent-color: #1877F2;
       height: 4px;
     }
 
@@ -171,6 +173,12 @@ import { CommonModule } from '@angular/common';
       border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: 600;
     }
     .btn-confirm:hover { background: #166FE5; }
+
+    @media (max-width: 420px) {
+      .cropper-header { padding: 12px 16px; }
+      .cropper-body { padding: 12px; }
+      .cropper-footer { padding: 12px 16px; }
+    }
   `],
 })
 export class ImageCropperComponent implements OnInit, OnDestroy {

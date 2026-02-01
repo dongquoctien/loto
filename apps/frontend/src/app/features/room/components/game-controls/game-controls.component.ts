@@ -144,7 +144,7 @@ import { FormsModule } from '@angular/forms';
       display: flex; align-items: center; gap: 8px;
       color: #B0B3B8; font-size: 13px; cursor: pointer;
     }
-    .auto-call-toggle input { cursor: pointer; accent-color: #1877F2; }
+    .auto-call-toggle input { cursor: pointer; }
     .alert-box {
       background: rgba(250, 56, 62, 0.15);
       border: 1px solid #FA383E;

@@ -28,7 +28,7 @@ interface Room {
       <header class="lobby-header">
         <h1>Lô Tô Online</h1>
         <div class="user-info">
-          <a class="username-link" href="javascript:void(0)" (click)="showProfile = true">
+          <a class="username-link desktop-only" href="javascript:void(0)" (click)="showProfile = true">
             <span class="avatar-wrapper">
               @if (user()?.avatarUrl) {
                 <img [src]="user()?.avatarUrl" alt="Avatar" class="avatar" />
@@ -39,7 +39,30 @@ interface Room {
             </span>
             <span class="display-name">{{ user()?.displayName }}</span>
           </a>
-          <button (click)="logout()">Đăng xuất</button>
+          <button class="desktop-only" (click)="logout()">Đăng xuất</button>
+
+          <!-- Mobile dropdown -->
+          <div class="mobile-menu">
+            <button class="mobile-user-btn" (click)="showUserMenu = !showUserMenu">
+              <span class="avatar-wrapper">
+                @if (user()?.avatarUrl) {
+                  <img [src]="user()?.avatarUrl" alt="Avatar" class="avatar" />
+                } @else {
+                  <span class="avatar avatar-placeholder">{{ user()?.displayName?.charAt(0)?.toUpperCase() || '?' }}</span>
+                }
+                <span class="status-dot"></span>
+              </span>
+              <span class="mobile-display-name">{{ user()?.displayName }}</span>
+              <span class="dropdown-arrow">▾</span>
+            </button>
+            @if (showUserMenu) {
+              <div class="dropdown-backdrop" (click)="showUserMenu = false"></div>
+              <div class="dropdown-menu">
+                <button (click)="showProfile = true; showUserMenu = false">Hồ sơ</button>
+                <button (click)="logout()">Đăng xuất</button>
+              </div>
+            }
+          </div>
         </div>
       </header>
 
@@ -141,8 +164,26 @@ interface Room {
     .avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; display: block; border: 2px solid rgba(255,255,255,0.4); box-sizing: border-box; }
     .avatar-placeholder { background: rgba(255,255,255,0.25); color: white; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
     .status-dot { position: absolute; bottom: 0; right: 0; width: 10px; height: 10px; background: #31A24C; border: 2px solid #1877F2; border-radius: 50%; }
-    .user-info button { background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: background 0.2s; }
-    .user-info button:hover { background: rgba(255,255,255,0.3); }
+    .user-info > button { background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: background 0.2s; }
+    .user-info > button:hover { background: rgba(255,255,255,0.3); }
+
+    /* Mobile dropdown - hidden on desktop */
+    .mobile-menu { display: none; position: relative; }
+    .mobile-user-btn { background: none; border: none; padding: 4px 8px; cursor: pointer; border-radius: 6px; transition: background 0.2s; display: flex; align-items: center; gap: 8px; color: white; }
+    .mobile-user-btn:hover { background: rgba(255,255,255,0.2); }
+    .mobile-display-name { font-size: 14px; font-weight: 600; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dropdown-arrow { font-size: 12px; opacity: 0.8; }
+    .dropdown-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 99; }
+    .dropdown-menu {
+      position: absolute; top: calc(100% + 8px); right: 0; z-index: 100;
+      background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      min-width: 160px; overflow: hidden;
+    }
+    .dropdown-menu button {
+      width: 100%; padding: 10px 16px; border: none; background: none;
+      text-align: left; cursor: pointer; font-size: 14px; color: #1C1E21; transition: background 0.15s;
+    }
+    .dropdown-menu button:hover { background: #F0F2F5; }
     .lobby-content { max-width: 800px; margin: 0 auto; padding: 24px; }
     .join-section, .create-section, .rooms-section {
       background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px;
@@ -156,7 +197,7 @@ interface Room {
     .join-form button:hover { background: #166FE5; }
     .form-group { margin-bottom: 12px; }
     .form-group label { display: block; margin-bottom: 4px; color: #606770; font-size: 14px; }
-    .form-group input, .form-group select { width: 100%; padding: 8px; border: 1px solid #DDDFE2; border-radius: 6px; box-sizing: border-box; }
+    .form-group input, .form-group select { width: 100%; padding: 8px; border: 1px solid #DDDFE2; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
     .form-group input:focus, .form-group select:focus { outline: none; border-color: #1877F2; box-shadow: 0 0 0 2px rgba(24,119,242,0.2); }
     .form-row { display: flex; gap: 12px; }
     .form-row .form-group { flex: 1; }
@@ -169,7 +210,15 @@ interface Room {
     .no-rooms { color: #65676B; text-align: center; }
     .win-rules { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 4px; }
     .checkbox-label { display: flex; align-items: center; gap: 6px; color: #606770; font-size: 14px; cursor: pointer; }
-    .checkbox-label input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: #1877F2; }
+    .checkbox-label input[type="checkbox"] { width: 18px; height: 18px; }
+    @media (max-width: 420px) {
+      .join-form { flex-direction: column; }
+      .join-form button { width: 100%; }
+      .desktop-only { display: none !important; }
+      .mobile-menu { display: block; }
+      .lobby-header h1 { font-size: 18px; }
+      .lobby-content { padding: 16px; }
+    }
   `],
 })
 export class LobbyComponent implements OnInit {
@@ -189,6 +238,7 @@ export class LobbyComponent implements OnInit {
   winVertical = false;
   winDiagonal = false;
   showProfile = false;
+  showUserMenu = false;
   isNewUser = false;
 
   ngOnInit() {

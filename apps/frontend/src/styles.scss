@@ -5,13 +5,213 @@
   box-sizing: border-box;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: #F0F2F5;
   color: #1C1E21;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
+
+/* ===== Form Elements Global Reset =====
+   Normalize form elements across iOS, Android, desktop.
+   Only resets appearance/font/behavior - does NOT set colors on buttons.
+   Components are responsible for their own colors.
+   ======================================= */
+
+/* Shared reset for all form elements */
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.4;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  outline: none;
+  touch-action: manipulation;
+}
+
+/* Text inputs & textarea */
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+input[type="tel"],
+input[type="url"],
+input[type="search"],
+input:not([type]),
+textarea {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #DDDFE2;
+  border-radius: 6px;
+  background: white;
+  color: #1C1E21;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="email"]:focus,
+input[type="number"]:focus,
+input[type="tel"]:focus,
+input[type="url"]:focus,
+input[type="search"]:focus,
+input:not([type]):focus,
+textarea:focus,
+select:focus {
+  border-color: #1877F2;
+  box-shadow: 0 0 0 2px rgba(24, 119, 242, 0.2);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #8A8D91;
+  opacity: 1;
+}
+
+/* Select */
+select {
+  padding: 10px 32px 10px 12px;
+  border: 1px solid #DDDFE2;
+  border-radius: 6px;
+  background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23606770' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;
+  color: #1C1E21;
+  cursor: pointer;
+}
+
+/* Textarea */
+textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Buttons - only reset behavior, NOT colors.
+   Each component sets its own background/color. */
+button {
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: opacity 0.15s;
+}
+
+button:active {
+  opacity: 0.8;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Checkbox & Radio */
+input[type="checkbox"],
+input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  border: 2px solid #BDBFC3;
+  border-radius: 6px;
+  background: white;
+  flex-shrink: 0;
+  position: relative;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+input[type="radio"] {
+  border-radius: 50%;
+}
+
+input[type="checkbox"]:checked,
+input[type="radio"]:checked {
+  background: #1877F2;
+  border-color: #1877F2;
+}
+
+input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 6px;
+  height: 11px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+input[type="radio"]:checked::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  background: white;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Range slider */
+input[type="range"] {
+  width: 100%;
+  height: 4px;
+  border: none;
+  border-radius: 2px;
+  background: #DDDFE2;
+  padding: 0;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #1877F2;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #1877F2;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* File input - invisible, styled via parent label */
+input[type="file"] {
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+/* ===== End Form Elements Reset ===== */
 
 a {
   color: #1877F2;

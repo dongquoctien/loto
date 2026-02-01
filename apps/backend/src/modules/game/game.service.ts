@@ -334,6 +334,91 @@ export class GameService {
     return state;
   }
 
+  /**
+   * Recover an active game session from DB into in-memory state.
+   * Used when backend restarts or in-memory state is lost.
+   * Returns null if no active session found in DB for this room.
+   */
+  async recoverSessionForRoom(
+    roomId: number,
+  ): Promise<{ sessionId: number; state: InMemoryGameState } | null> {
+    // Check if already in memory
+    const existing = this.findSessionForRoom(roomId);
+    if (existing) return existing;
+
+    // Look for non-finished session in DB
+    const session = await this.sessionRepository.findOne({
+      where: [
+        { roomId, status: 'preparing' },
+        { roomId, status: 'active' },
+        { roomId, status: 'paused' },
+        { roomId, status: 'paused_for_kinh' },
+      ],
+      order: { id: 'DESC' },
+    });
+
+    if (!session) return null;
+
+    // Reconstruct called numbers in order
+    const calledNumberEntities = await this.calledNumberRepository.find({
+      where: { sessionId: session.id },
+      order: { callOrder: 'ASC' },
+    });
+    const calledNumbers = calledNumberEntities.map((cn) => cn.numberValue);
+
+    // Reconstruct remaining numbers: all 1-90 minus called, then shuffle
+    const calledSet = new Set(calledNumbers);
+    const remainingNumbers: number[] = [];
+    for (let i = 1; i <= 90; i++) {
+      if (!calledSet.has(i)) {
+        remainingNumbers.push(i);
+      }
+    }
+    // Shuffle remaining numbers
+    for (let i = remainingNumbers.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [remainingNumbers[i], remainingNumbers[j]] = [remainingNumbers[j], remainingNumbers[i]];
+    }
+
+    // Reconstruct purchased sheets
+    const purchasedSheetEntities = await this.purchasedSheetRepository.find({
+      where: { sessionId: session.id },
+    });
+    const purchasedSheets = new Map<number, number>();
+    for (const ps of purchasedSheetEntities) {
+      purchasedSheets.set(ps.sheetId, ps.userId);
+    }
+
+    // Reconstruct penalized players
+    const penaltyEntities = await this.penaltyRepository.find({
+      where: { sessionId: session.id },
+    });
+    const penalizedPlayers = new Set<number>();
+    for (const p of penaltyEntities) {
+      penalizedPlayers.add(p.userId);
+    }
+
+    const state: InMemoryGameState = {
+      calledNumbers,
+      remainingNumbers,
+      autoCallTimer: null,
+      status: session.status,
+      purchasedSheets,
+      penalizedPlayers,
+      currentKinhClaim: null, // Cannot recover pending claim — will be treated as if rejected
+    };
+
+    // Store in memory
+    this.gameStates.set(session.id, state);
+    this.sessionRoomMap.set(session.id, roomId);
+
+    this.logger.log(
+      `Recovered session ${session.id} for room ${roomId} from DB (status: ${session.status}, called: ${calledNumbers.length}, sheets: ${purchasedSheets.size})`,
+    );
+
+    return { sessionId: session.id, state };
+  }
+
   async markCell(
     sessionId: number,
     userId: number,
@@ -342,14 +427,11 @@ export class GameService {
     colIndex: number,
     numberValue: number,
   ): Promise<void> {
-    await this.markedCellRepository.save({
-      sessionId,
-      userId,
-      ticketId,
-      rowIndex,
-      colIndex,
-      numberValue,
-    });
+    // Use upsert to avoid ER_DUP_ENTRY when user marks the same cell twice
+    await this.markedCellRepository.upsert(
+      { sessionId, userId, ticketId, rowIndex, colIndex, numberValue },
+      ['sessionId', 'userId', 'ticketId', 'rowIndex', 'colIndex'],
+    );
   }
 
   async unmarkCell(

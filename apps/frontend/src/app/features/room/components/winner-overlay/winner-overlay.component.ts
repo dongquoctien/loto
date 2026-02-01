@@ -143,10 +143,11 @@ interface ConfettiParticle {
       text-align: center;
       max-width: 420px;
       width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
       position: relative;
       z-index: 1;
       animation: cardEntrance 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
-      overflow: hidden;
       box-shadow:
         0 0 40px rgba(255, 215, 0, 0.25),
         0 0 80px rgba(255, 215, 0, 0.10),
@@ -458,6 +459,20 @@ interface ConfettiParticle {
       background: linear-gradient(135deg, #1565D8, #1254B5);
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgba(24, 119, 242, 0.4);
+    }
+
+    @media (max-width: 420px) {
+      .winner-card { padding: 24px 16px; border-radius: 16px; }
+      .trophy { font-size: 44px; }
+      h2 { font-size: 17px; margin-bottom: 14px; }
+      .winner-avatar { width: 80px; height: 80px; }
+      .avatar-placeholder { font-size: 32px; }
+      .winner-name { font-size: 20px; }
+      .payment-amount { font-size: 26px; }
+      .total-amount { font-size: 18px; }
+      .qr-code { max-width: 180px; }
+      .report-list { max-height: 150px; }
+      .dismiss-btn { padding: 12px; font-size: 14px; }
     }
   `],
 })

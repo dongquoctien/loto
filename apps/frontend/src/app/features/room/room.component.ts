@@ -14,6 +14,7 @@ import { GameControlsComponent } from './components/game-controls/game-controls.
 import { KinhButtonComponent } from './components/kinh-button/kinh-button.component';
 import { WinnerOverlayComponent, PaymentReportItem } from './components/winner-overlay/winner-overlay.component';
 import { PlayerListComponent } from './components/player-list/player-list.component';
+import { KinhClaimOverlayComponent, KinhClaimOverlayData } from './components/kinh-claim-overlay/kinh-claim-overlay.component';
 
 interface RoomData {
   id: number;
@@ -63,6 +64,7 @@ interface SheetInfo {
     KinhButtonComponent,
     WinnerOverlayComponent,
     PlayerListComponent,
+    KinhClaimOverlayComponent,
   ],
   template: `
     <div class="room-container">
@@ -245,6 +247,11 @@ interface SheetInfo {
             </div>
           </div>
         </div>
+      }
+
+      <!-- Kinh Claim Overlay (non-owner players) -->
+      @if (kinhClaimOverlay() && !isOwner()) {
+        <app-kinh-claim-overlay [data]="kinhClaimOverlay()!"></app-kinh-claim-overlay>
       }
 
       <!-- Winner Overlay -->
@@ -456,6 +463,8 @@ interface SheetInfo {
       left: 50%;
       transform: translateX(-50%);
       z-index: 1000;
+      width: 90%;
+      max-width: 320px;
       animation: toastSlideIn 0.3s ease-out, toastFadeOut 0.3s ease-in 1.7s forwards;
     }
     .near-win-toast-content {
@@ -499,6 +508,7 @@ interface SheetInfo {
     }
 
     @media (max-width: 768px) {
+      .near-win-toast { top: 56px; }
       .room-header {
         padding: 8px 12px;
         flex-wrap: wrap;
@@ -565,13 +575,14 @@ export class RoomComponent implements OnInit, OnDestroy {
   soundEnabled = signal(true);
   handsFreeMode = signal(false);
 
-  // Near-win (đang đợi) state
-  nearWinPlayers = signal<Set<number>>(new Set());
+  // Near-win (đang đợi) state: userId -> nearWinCount
+  nearWinPlayers = signal<Map<number, number>>(new Map());
   nearWinToast = signal<{ displayName: string; avatarUrl: string | null } | null>(null);
 
   // Kinh / Winner state
   kinhClaimant = signal<{ displayName: string; winType: string } | null>(null);
   kinhClaimantUserId = signal<number | null>(null);
+  kinhClaimOverlay = signal<KinhClaimOverlayData | null>(null);
   verifyTicket = signal<TicketData | null>(null);
   verifyMarkedCells = signal<Set<string>>(new Set());
   verifyWinCells = signal<Set<string>>(new Set());
@@ -616,6 +627,17 @@ export class RoomComponent implements OnInit, OnDestroy {
       this.socketService.emit('room:join', { roomCode });
     }
     this.setupSocketListeners();
+
+    // Auto-rejoin room after reconnect (fixes lost connection issues)
+    this.socketService.onReconnected$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        const code = this.room()?.roomCode || this.route.snapshot.paramMap.get('code');
+        if (code) {
+          console.log('Reconnected — rejoining room:', code);
+          this.socketService.emit('room:join', { roomCode: code });
+        }
+      });
   }
 
   ngOnDestroy() {
@@ -652,6 +674,10 @@ export class RoomComponent implements OnInit, OnDestroy {
           this.calledNumbers.set(data.session.calledNumbers || []);
           if (data.session.calledNumbers?.length) {
             this.lastCalledNumber.set(data.session.calledNumbers[data.session.calledNumbers.length - 1]);
+          }
+          // Sync auto-call checkbox when rejoining active game
+          if (data.session.status === 'active' && data.room.callMode === 'auto') {
+            this.autoCallEnabled.set(true);
           }
         }
 
@@ -706,9 +732,11 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.calledNumbers.set([]);
         this.lastCalledNumber.set(null);
         this.markedCells.set(new Set());
-        this.nearWinPlayers.set(new Set());
+        this.nearWinPlayers.set(new Map());
         this.nearWinToast.set(null);
         this.kinhClaimantUserId.set(null);
+        // Sync auto-call checkbox with room's callMode
+        this.autoCallEnabled.set(this.room()?.callMode === 'auto');
         this.audioService.play('start');
       });
 
@@ -755,17 +783,39 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.gameStatus.set('active');
         this.kinhClaimant.set(null);
         this.kinhClaimantUserId.set(null);
+        this.kinhClaimOverlay.set(null);
         this.verifyTicket.set(null);
         this.highlightCalledNumber.set(null);
       });
 
     // Kinh claimed
     this.socketService
-      .on<{ userId: number; displayName: string; winType: string }>('kinh:claimed')
+      .on<{
+        userId: number;
+        displayName: string;
+        avatarUrl: string | null;
+        winType: string;
+        lineDetails: { rowIndex?: number; colIndex?: number; direction?: string; startCol?: number } | null;
+        ticketRows: ((number | null)[])[] | null;
+      }>('kinh:claimed')
       .pipe(takeUntil(this.destroy$))
       .subscribe((data) => {
         this.kinhClaimant.set({ displayName: data.displayName, winType: data.winType });
         this.kinhClaimantUserId.set(data.userId);
+
+        // Build overlay data for non-owner players
+        const winningNumbers = this.extractWinningNumbers(
+          data.ticketRows,
+          data.winType,
+          data.lineDetails,
+        );
+        this.kinhClaimOverlay.set({
+          displayName: data.displayName,
+          avatarUrl: data.avatarUrl,
+          winType: data.winType,
+          winningNumbers,
+        });
+
         this.audioService.play('kinh');
       });
 
@@ -837,6 +887,7 @@ export class RoomComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe((data) => {
         this.gameStatus.set('finished');
+        this.kinhClaimOverlay.set(null);
         this.winnerInfo.set({
           displayName: data.displayName,
           avatarUrl: data.avatarUrl,
@@ -894,22 +945,23 @@ export class RoomComponent implements OnInit, OnDestroy {
 
     // Player near-win (đang đợi KINH)
     this.socketService
-      .on<{ userId: number; displayName: string; avatarUrl: string | null }>('player:near-win')
+      .on<{ userId: number; displayName: string; avatarUrl: string | null; nearWinCount: number }>('player:near-win')
       .pipe(takeUntil(this.destroy$))
       .subscribe((data) => {
-        // Only show toast if this user doesn't already have near-win status
-        const alreadyNearWin = this.nearWinPlayers().has(data.userId);
+        const prevCount = this.nearWinPlayers().get(data.userId) || 0;
+        const newCount = data.nearWinCount || 1;
 
-        // Add to nearWinPlayers set (persists for player list blinking)
-        this.nearWinPlayers.update((s) => {
-          const newSet = new Set(s);
-          newSet.add(data.userId);
-          return newSet;
+        // Update nearWinPlayers map (userId -> count)
+        this.nearWinPlayers.update((m) => {
+          const newMap = new Map(m);
+          newMap.set(data.userId, newCount);
+          return newMap;
         });
 
-        // Show toast popup for 2 seconds only if not already shown
-        if (!alreadyNearWin) {
+        // Show toast and play sound when count increases (new near-win lines detected)
+        if (newCount > prevCount) {
           this.nearWinToast.set({ displayName: data.displayName, avatarUrl: data.avatarUrl });
+          this.audioService.play('near-win');
           setTimeout(() => this.nearWinToast.set(null), 2000);
         }
       });
@@ -925,7 +977,7 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.lastCalledNumber.set(null);
         this.isPenalized.set(false);
         this.penalizedPlayersSet.set(new Set());
-        this.nearWinPlayers.set(new Set());
+        this.nearWinPlayers.set(new Map());
         this.nearWinToast.set(null);
         this.winnerInfo.set(null);
         this.paymentAmount.set(null);
@@ -935,6 +987,7 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.takenSheets.set(new Map());
         this.kinhClaimant.set(null);
         this.kinhClaimantUserId.set(null);
+        this.kinhClaimOverlay.set(null);
         this.verifyTicket.set(null);
         this.highlightCalledNumber.set(null);
         this.autoCallEnabled.set(false);
@@ -1188,6 +1241,45 @@ export class RoomComponent implements OnInit, OnDestroy {
         return; // Only claim once
       }
     }
+  }
+
+  /**
+   * Extract winning line numbers from ticket rows based on winType and lineDetails.
+   */
+  private extractWinningNumbers(
+    ticketRows: ((number | null)[])[] | null,
+    winType: string,
+    lineDetails: { rowIndex?: number; colIndex?: number; direction?: string; startCol?: number } | null,
+  ): number[] {
+    if (!ticketRows || !lineDetails) return [];
+
+    const nums: number[] = [];
+    if (winType === 'horizontal' && lineDetails.rowIndex !== undefined) {
+      const row = ticketRows[lineDetails.rowIndex];
+      if (row) {
+        for (const cell of row) {
+          if (cell !== null && cell !== 0) nums.push(cell);
+        }
+      }
+    } else if (winType === 'vertical' && lineDetails.colIndex !== undefined) {
+      for (const row of ticketRows) {
+        if (row) {
+          const cell = row[lineDetails.colIndex!];
+          if (cell !== null && cell !== 0) nums.push(cell);
+        }
+      }
+    } else if (winType === 'diagonal') {
+      const startCol = lineDetails.startCol ?? 0;
+      const isMain = lineDetails.direction === 'main';
+      for (let r = 0; r < ticketRows.length; r++) {
+        const c = isMain ? startCol + r : startCol - r;
+        if (c >= 0 && c < (ticketRows[r]?.length ?? 0)) {
+          const cell = ticketRows[r][c];
+          if (cell !== null && cell !== 0) nums.push(cell);
+        }
+      }
+    }
+    return nums;
   }
 
   leaveRoom() {

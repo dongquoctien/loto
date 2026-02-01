@@ -180,7 +180,7 @@ import { ImageCropperComponent } from './image-cropper.component';
     .form-group label { display: block; margin-bottom: 6px; color: #606770; font-size: 14px; }
     .form-group input {
       width: 100%; padding: 10px; border: 1px solid #DDDFE2;
-      border-radius: 6px; box-sizing: border-box; font-size: 15px;
+      border-radius: 6px; box-sizing: border-box; font-size: 16px;
     }
     .form-group input:focus { outline: none; border-color: #1877F2; box-shadow: 0 0 0 2px rgba(24,119,242,0.2); }
     .qr-section { margin-bottom: 16px; }
@@ -213,6 +213,21 @@ import { ImageCropperComponent } from './image-cropper.component';
       cursor: pointer; padding: 8px 16px; border-radius: 6px; transition: background 0.2s;
     }
     .skip-btn:hover { background: #F0F2F5; color: #1C1E21; }
+
+    @media (max-width: 420px) {
+      .profile-card { width: 100%; max-width: none; max-height: 100vh; border-radius: 0; }
+      .overlay { align-items: stretch; }
+      .modal-header { padding: 12px 16px; }
+      .modal-header h2 { font-size: 18px; }
+      .avatar-section { padding: 16px 16px 0; }
+      .avatar, .avatar-placeholder { width: 72px; height: 72px; }
+      .avatar-placeholder { font-size: 28px; }
+      form { padding: 12px 16px 16px; }
+      .success-message, .error-message { margin: 12px 16px 0; }
+      .welcome-message { padding: 10px 16px; }
+      .skip-section { padding: 0 16px 12px; }
+      .qr-image { max-width: 140px; }
+    }
   `],
 })
 export class ProfileComponent implements OnInit {

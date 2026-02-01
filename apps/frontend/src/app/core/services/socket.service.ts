@@ -1,6 +1,6 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
-import { Observable, Subject } from 'rxjs';
+import { Observable, Subject, BehaviorSubject } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AuthService } from './auth.service';
 
@@ -8,6 +8,15 @@ import { AuthService } from './auth.service';
 export class SocketService implements OnDestroy {
   private socket: Socket | null = null;
   private destroy$ = new Subject<void>();
+
+  /** Emits true when socket reconnects after a disconnect */
+  private reconnected$ = new Subject<void>();
+  /** Observable that components can subscribe to for reconnect events */
+  readonly onReconnected$ = this.reconnected$.asObservable();
+
+  /** Tracks connection state */
+  private connectionState$ = new BehaviorSubject<'connected' | 'disconnected' | 'reconnecting'>('disconnected');
+  readonly connectionState = this.connectionState$.asObservable();
 
   constructor(private authService: AuthService) {}
 
@@ -19,18 +28,33 @@ export class SocketService implements OnDestroy {
 
     this.socket = io(environment.wsUrl, {
       auth: { token },
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
+      timeout: 20000,
     });
 
     this.socket.on('connect', () => {
-      console.log('Socket connected');
+      console.log('Socket connected, id:', this.socket?.id);
+      const prevState = this.connectionState$.value;
+      this.connectionState$.next('connected');
+
+      // If we were disconnected/reconnecting, notify subscribers to rejoin
+      if (prevState === 'reconnecting' || prevState === 'disconnected') {
+        this.reconnected$.next();
+      }
     });
 
     this.socket.on('disconnect', (reason) => {
       console.log('Socket disconnected:', reason);
+      this.connectionState$.next(reason === 'io client disconnect' ? 'disconnected' : 'reconnecting');
+    });
+
+    this.socket.io.on('reconnect_attempt', (attempt) => {
+      console.log(`Socket reconnection attempt #${attempt}`);
+      this.connectionState$.next('reconnecting');
     });
 
     this.socket.on('connect_error', (error) => {
@@ -41,6 +65,7 @@ export class SocketService implements OnDestroy {
   disconnect(): void {
     this.socket?.disconnect();
     this.socket = null;
+    this.connectionState$.next('disconnected');
   }
 
   emit(event: string, data?: unknown): void {
@@ -61,6 +86,10 @@ export class SocketService implements OnDestroy {
         this.socket?.off(event, handler);
       };
     });
+  }
+
+  get isConnected(): boolean {
+    return this.socket?.connected ?? false;
   }
 
   ngOnDestroy(): void {
