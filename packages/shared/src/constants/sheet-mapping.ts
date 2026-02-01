@@ -24,11 +24,10 @@ export const SHEET_TO_TICKETS: Record<number, [number, number, number]> = {
   18: [52, 53, 54],
   19: [55, 56, 57],
   20: [58, 59, 60],
-  21: [61, 62, 63],
 };
 
-export const TOTAL_SHEETS = 21;
-export const TOTAL_TICKETS = 63;
+export const TOTAL_SHEETS = 20;
+export const TOTAL_TICKETS = 60;
 export const TICKETS_PER_SHEET = 3;
 export const NUMBERS_RANGE = { min: 1, max: 90 };
 export const ROWS_PER_TICKET = 3;
