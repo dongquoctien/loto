@@ -126,7 +126,8 @@ interface SheetInfo {
                 [players]="players()"
                 [currentUserId]="currentUserId()"
                 [canPurchase]="!!sessionId()"
-                (sheetSelected)="purchaseSheet($event)">
+                (sheetSelected)="purchaseSheet($event)"
+                (sheetReturned)="returnSheet($event)">
               </app-sheet-selector>
             }
 
@@ -892,6 +893,23 @@ export class RoomComponent implements OnInit, OnDestroy {
           }
           return newMap;
         });
+
+        // Remove returned tickets from myTickets
+        if (data.userId === this.currentUserId()) {
+          const releasedSheetIds = new Set(data.sheetIds);
+          const sheets = this.availableSheets();
+          const releasedTicketIds = new Set<number>();
+          for (const sheet of sheets) {
+            if (releasedSheetIds.has(sheet.id)) {
+              for (const t of sheet.tickets) {
+                releasedTicketIds.add(t.id);
+              }
+            }
+          }
+          this.myTickets.update((tickets) =>
+            tickets.filter((t) => !releasedTicketIds.has(t.id)),
+          );
+        }
       });
 
     // Sheet taken
@@ -1220,6 +1238,12 @@ export class RoomComponent implements OnInit, OnDestroy {
     const sid = this.sessionId();
     if (!sid) return;
     this.socketService.emit('sheet:purchase', { sessionId: sid, sheetId: sheet.id });
+  }
+
+  returnSheet(sheet: SheetInfo) {
+    const sid = this.sessionId();
+    if (!sid) return;
+    this.socketService.emit('sheet:return', { sessionId: sid, sheetId: sheet.id });
   }
 
   onNumberLookup(num: number) {

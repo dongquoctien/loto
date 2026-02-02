@@ -98,6 +98,12 @@ const COLOR_HEX: Record<string, { bg: string; border: string; text: string; name
                     🛒 Mua Tờ {{ sheet.sheetNumber }}
                   </button>
                 }
+                @if (mine && canPurchase) {
+                  <button class="btn-return"
+                          (click)="onReturn(sheet); $event.stopPropagation()">
+                    ↩ Hoàn Tờ {{ sheet.sheetNumber }}
+                  </button>
+                }
               </div>
             }
           </div>
@@ -229,6 +235,24 @@ const COLOR_HEX: Record<string, { bg: string; border: string; text: string; name
     .btn-buy:hover {
       filter: brightness(1.1);
     }
+    .btn-return {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #FF4444;
+      border-radius: 6px;
+      background: transparent;
+      color: #FF4444;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s;
+      margin-top: 4px;
+    }
+    .btn-return:hover {
+      background: #FF4444;
+      color: white;
+    }
 
     /* Buyer info on taken sheets */
     .buyer-info {
@@ -276,6 +300,7 @@ export class SheetSelectorComponent {
   @Input() canPurchase = true;
 
   @Output() sheetSelected = new EventEmitter<SheetInfo>();
+  @Output() sheetReturned = new EventEmitter<SheetInfo>();
 
   previewSheetId: number | null = null;
 
@@ -308,6 +333,12 @@ export class SheetSelectorComponent {
   onSelect(sheet: SheetInfo) {
     if (this.isTaken(sheet.id) || !this.canPurchase) return;
     this.sheetSelected.emit(sheet);
+    this.previewSheetId = null;
+  }
+
+  onReturn(sheet: SheetInfo) {
+    if (!this.isMine(sheet.id)) return;
+    this.sheetReturned.emit(sheet);
     this.previewSheetId = null;
   }
 }

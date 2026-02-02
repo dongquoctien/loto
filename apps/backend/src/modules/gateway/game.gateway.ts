@@ -345,6 +345,28 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  @SubscribeMessage('sheet:return')
+  async handleReturnSheet(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { sessionId: number; sheetId: number },
+  ) {
+    if (!client.userId) return;
+
+    try {
+      await this.gameService.returnSheet(data.sessionId, client.userId, data.sheetId);
+
+      if (client.currentRoomId) {
+        this.server.to(`room:${client.currentRoomId}`).emit('sheet:released', {
+          sheetIds: [data.sheetId],
+          userId: client.userId,
+        });
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to return sheet';
+      client.emit('error', { message });
+    }
+  }
+
   @SubscribeMessage('game:start')
   async handleStartGame(
     @ConnectedSocket() client: AuthenticatedSocket,

@@ -215,6 +215,26 @@ export class GameService {
     return freedSheetIds;
   }
 
+  async returnSheet(
+    sessionId: number,
+    userId: number,
+    sheetId: number,
+  ): Promise<void> {
+    const state = this.getState(sessionId);
+
+    if (state.status !== 'preparing') {
+      throw new BadRequestException('Can only return sheets before game starts');
+    }
+
+    const owner = state.purchasedSheets.get(sheetId);
+    if (owner !== userId) {
+      throw new ForbiddenException('You can only return your own sheets');
+    }
+
+    await this.purchasedSheetRepository.delete({ sessionId, sheetId, userId });
+    state.purchasedSheets.delete(sheetId);
+  }
+
   async startGame(sessionId: number): Promise<void> {
     const state = this.getState(sessionId);
     state.status = 'active';
