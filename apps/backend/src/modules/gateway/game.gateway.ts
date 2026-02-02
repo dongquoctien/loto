@@ -194,6 +194,18 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         purchasedSheets: purchasedSheetsMap,
       });
 
+      // If game is paused for kinh, send claims to reconnecting client
+      if (state.state.status === 'paused_for_kinh' && state.state.kinhClaims.length > 0) {
+        const claimsPayload = await this.buildClaimsPayload(state.sessionId);
+        client.emit('kinh:claims-updated', claimsPayload);
+
+        // If client is owner, also send verify data
+        if (room.ownerId === client.userId) {
+          const verifyPayload = await this.buildVerifyPayloads(state.sessionId);
+          client.emit('kinh:verify-request', verifyPayload);
+        }
+      }
+
       // Notify others
       client.to(`room:${room.id}`).emit('room:player-joined', {
         userId: client.userId,
@@ -242,10 +254,36 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Delete room from DB
       await this.roomService.deleteRoom(data.roomId);
     } else {
-      // Remove any active kinh claims from the leaving player
       const activeSession = this.gameService.findSessionForRoom(data.roomId);
+
       if (activeSession) {
+        const status = activeSession.state.status;
+        const hasSheets = [...activeSession.state.purchasedSheets.values()].includes(client.userId);
+
+        // Block leaving only if user has purchased sheets and game is in progress
+        if (hasSheets && (status === 'active' || status === 'paused' || status === 'paused_for_kinh')) {
+          client.emit('error', {
+            message: 'Không thể rời phòng khi trò chơi đang diễn ra.',
+          });
+          return;
+        }
+
+        // Remove any active kinh claims from the leaving player
         this.gameService.removeClaimForUser(activeSession.sessionId, client.userId);
+
+        // Release purchased sheets
+        const freedSheetIds = await this.gameService.releaseUserSheets(
+          activeSession.sessionId,
+          client.userId,
+        );
+
+        // Notify remaining players which sheets are now available again
+        if (freedSheetIds.length > 0) {
+          this.server.to(`room:${data.roomId}`).emit('sheet:released', {
+            sheetIds: freedSheetIds,
+            userId: client.userId,
+          });
+        }
       }
 
       await this.roomService.leaveRoom(data.roomId, client.userId);
@@ -1053,22 +1091,39 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const state = this.gameService.getState(sessionId);
       if (!state.challenge || state.challenge.status !== 'picking') return;
 
-      if (state.challenge.picks.size === 0) {
-        // No picks at all — return to verify mode
-        const abandonedCards = state.challenge.cards;
-        state.challenge = null;
-        const claimsPayload = await this.buildClaimsPayload(sessionId);
-        this.server.to(`room:${roomId}`).emit('challenge:result', {
-          winnerId: -1,
-          winnerDisplayName: '',
-          picks: [],
-          allCardValues: abandonedCards,
-        });
-        this.server.to(`room:${roomId}`).emit('kinh:claims-updated', claimsPayload);
-        return;
+      // Auto-pick cards for non-pickers, sorted by username alphabetically
+      const nonPickerIds = state.challenge.participantIds.filter(
+        (id) => !state.challenge!.picks.has(id),
+      );
+
+      if (nonPickerIds.length > 0) {
+        // Get usernames for sorting
+        const nonPickerUsers = await Promise.all(
+          nonPickerIds.map(async (uid) => {
+            const u = await this.userService.findById(uid);
+            return { userId: uid, username: (u.displayName || u.username).toLowerCase() };
+          }),
+        );
+        nonPickerUsers.sort((a, b) => a.username.localeCompare(b.username));
+
+        // Find available card indices (not already taken)
+        const takenIndices = new Set(
+          Array.from(state.challenge.picks.values()).map((p) => p.cardIndex),
+        );
+        const availableIndices = [];
+        for (let i = 0; i < state.challenge.cards.length; i++) {
+          if (!takenIndices.has(i)) availableIndices.push(i);
+        }
+
+        // Auto-assign cards in order
+        for (let i = 0; i < nonPickerUsers.length && i < availableIndices.length; i++) {
+          const cardIndex = availableIndices[i];
+          const value = state.challenge.cards[cardIndex];
+          state.challenge.picks.set(nonPickerUsers[i].userId, { cardIndex, value });
+        }
       }
 
-      // Resolve with existing picks (non-pickers auto-lose)
+      // Resolve with all picks (manual + auto-assigned)
       await this.resolveChallenge(sessionId, roomId);
     } catch (err) {
       this.logger.error('Failed to resolve challenge timeout', err);

@@ -7,6 +7,7 @@ import { PurchasedSheetEntity } from './entities/purchased-sheet.entity';
 import { MarkedCellEntity } from './entities/marked-cell.entity';
 import { GameResultEntity } from './entities/game-result.entity';
 import { PenaltyEntity } from './entities/penalty.entity';
+import { KinhClaimEntity } from './entities/kinh-claim.entity';
 import { TicketService } from '../ticket/ticket.service';
 import { RoomService } from '../room/room.service';
 import { WinType, LineDetails, validateWinClaim, TicketData } from '@loto/shared';
@@ -61,6 +62,8 @@ export class GameService {
     private readonly gameResultRepository: Repository<GameResultEntity>,
     @InjectRepository(PenaltyEntity)
     private readonly penaltyRepository: Repository<PenaltyEntity>,
+    @InjectRepository(KinhClaimEntity)
+    private readonly kinhClaimRepository: Repository<KinhClaimEntity>,
     private readonly ticketService: TicketService,
     private readonly roomService: RoomService,
     private readonly dataSource: DataSource,
@@ -180,6 +183,38 @@ export class GameService {
     }
   }
 
+  /**
+   * Release all sheets purchased by a user in a session.
+   * Returns the list of freed sheetIds so the gateway can broadcast.
+   */
+  async releaseUserSheets(
+    sessionId: number,
+    userId: number,
+  ): Promise<number[]> {
+    const state = this.gameStates.get(sessionId);
+    if (!state) return [];
+
+    // Collect sheetIds owned by this user
+    const freedSheetIds: number[] = [];
+    for (const [sheetId, ownerId] of state.purchasedSheets) {
+      if (ownerId === userId) {
+        freedSheetIds.push(sheetId);
+      }
+    }
+
+    if (freedSheetIds.length === 0) return [];
+
+    // Remove from DB
+    await this.purchasedSheetRepository.delete({ sessionId, userId });
+
+    // Remove from in-memory state
+    for (const sheetId of freedSheetIds) {
+      state.purchasedSheets.delete(sheetId);
+    }
+
+    return freedSheetIds;
+  }
+
   async startGame(sessionId: number): Promise<void> {
     const state = this.getState(sessionId);
     state.status = 'active';
@@ -293,6 +328,17 @@ export class GameService {
 
     await this.sessionRepository.update(sessionId, { status: 'paused_for_kinh' });
 
+    // Persist claim to DB for recovery
+    this.kinhClaimRepository.save({
+      sessionId,
+      userId,
+      ticketId,
+      winType,
+      lineDetails: lineDetails as unknown as Record<string, unknown>,
+      preValidated,
+      claimOrder,
+    }).catch((err) => this.logger.error(`Failed to persist kinh claim for session ${sessionId}`, err.stack));
+
     return { preValidated, isFirstClaim, claimOrder };
   }
 
@@ -313,6 +359,10 @@ export class GameService {
       clearInterval(state.autoCallTimer);
       state.autoCallTimer = null;
     }
+
+    // Clear all persisted claims
+    this.kinhClaimRepository.delete({ sessionId })
+      .catch((err) => this.logger.error(`Failed to delete kinh claims for session ${sessionId}`, err.stack));
 
     const result = await this.gameResultRepository.save({
       sessionId,
@@ -344,6 +394,10 @@ export class GameService {
       reason: 'wrong_kinh',
       mustPay: true,
     });
+
+    // Remove rejected claim from DB
+    this.kinhClaimRepository.delete({ sessionId, userId: rejectedUserId })
+      .catch((err) => this.logger.error(`Failed to delete kinh claim for user ${rejectedUserId}`, err.stack));
 
     if (state.kinhClaims.length === 0) {
       state.status = 'active';
@@ -471,6 +525,10 @@ export class GameService {
     const state = this.gameStates.get(sessionId);
     if (!state) return;
     state.kinhClaims = state.kinhClaims.filter((c) => c.userId !== userId);
+
+    // Remove from DB
+    this.kinhClaimRepository.delete({ sessionId, userId })
+      .catch((err) => this.logger.error(`Failed to delete kinh claim for user ${userId}`, err.stack));
   }
 
   calculatePayments(
@@ -580,14 +638,36 @@ export class GameService {
       penalizedPlayers.add(p.userId);
     }
 
-    // Cannot recover pending kinh claims from DB — if status was paused_for_kinh, resume to active
+    // Recover kinh claims from DB
     let recoveredStatus = session.status;
+    let recoveredKinhClaims: KinhClaimEntry[] = [];
+
     if (recoveredStatus === 'paused_for_kinh') {
-      recoveredStatus = 'active';
-      this.logger.warn(
-        `Session ${session.id} was paused_for_kinh but claims cannot be recovered — resuming to active`,
-      );
-      this.sessionRepository.update(session.id, { status: 'active' });
+      const claimEntities = await this.kinhClaimRepository.find({
+        where: { sessionId: session.id },
+        order: { claimOrder: 'ASC' },
+      });
+
+      if (claimEntities.length > 0) {
+        recoveredKinhClaims = claimEntities.map((c) => ({
+          userId: c.userId,
+          ticketId: c.ticketId,
+          winType: c.winType as WinType,
+          lineDetails: (c.lineDetails || {}) as LineDetails,
+          preValidated: c.preValidated,
+          claimOrder: c.claimOrder,
+        }));
+        this.logger.log(
+          `Recovered ${recoveredKinhClaims.length} kinh claims for session ${session.id}`,
+        );
+      } else {
+        // No claims in DB but status was paused_for_kinh — resume to active
+        recoveredStatus = 'active';
+        this.logger.warn(
+          `Session ${session.id} was paused_for_kinh but no claims found in DB — resuming to active`,
+        );
+        this.sessionRepository.update(session.id, { status: 'active' });
+      }
     }
 
     const state: InMemoryGameState = {
@@ -597,7 +677,7 @@ export class GameService {
       status: recoveredStatus,
       purchasedSheets,
       penalizedPlayers,
-      kinhClaims: [],
+      kinhClaims: recoveredKinhClaims,
       challenge: null,
     };
 

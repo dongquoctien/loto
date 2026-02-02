@@ -77,39 +77,42 @@ interface SheetInfo {
           <p>Đang kết nối phòng...</p>
         </div>
       } @else {
-        <!-- Header -->
-        <header class="room-header">
-          <div class="room-title">
-            <h2>{{ room()?.name }}</h2>
-            <span class="room-code" (click)="copyRoomCode()" title="Bấm để sao chép">
-              {{ room()?.roomCode }}
-              @if (copiedRoomCode()) {
-                <span class="copied-tooltip">Copied!</span>
+        <!-- Sticky Top Area -->
+        <div class="sticky-top">
+          <!-- Header -->
+          <header class="room-header">
+            <div class="room-title">
+              <h2>{{ room()?.name }}</h2>
+              <span class="room-code" (click)="copyRoomCode()" title="Bấm để sao chép">
+                {{ room()?.roomCode }}
+                @if (copiedRoomCode()) {
+                  <span class="copied-tooltip">Copied!</span>
+                }
+              </span>
+              <span class="price-badge">{{ room()?.pricePerSheet | number:'1.0-0' }}đ/tờ</span>
+            </div>
+            <div class="room-actions">
+              @if (myTickets().length > 0 && gameStatus() !== 'preparing' && gameStatus() !== 'finished') {
+                <button class="hands-free-toggle" [class.active]="handsFreeMode()" (click)="toggleHandsFree()">
+                  {{ handsFreeMode() ? '🤖 Rảnh Tay' : '✋ Thủ Công' }}
+                </button>
               }
-            </span>
-            <span class="price-badge">{{ room()?.pricePerSheet | number:'1.0-0' }}đ/tờ</span>
-          </div>
-          <div class="room-actions">
-            @if (myTickets().length > 0 && gameStatus() !== 'preparing' && gameStatus() !== 'finished') {
-              <button class="hands-free-toggle" [class.active]="handsFreeMode()" (click)="toggleHandsFree()">
-                {{ handsFreeMode() ? '🤖 Rảnh Tay' : '✋ Thủ Công' }}
+              <button class="sound-toggle" (click)="toggleSound()">
+                {{ soundEnabled() ? '🔊' : '🔇' }}
               </button>
-            }
-            <button class="sound-toggle" (click)="toggleSound()">
-              {{ soundEnabled() ? '🔊' : '🔇' }}
-            </button>
-            <button class="leave-btn" (click)="leaveRoom()">Rời Phòng</button>
-          </div>
-        </header>
+              <button class="leave-btn" (click)="leaveRoom()" [disabled]="isGameInProgress()">Rời Phòng</button>
+            </div>
+          </header>
 
-        <!-- Called Numbers -->
-        @if (sessionId()) {
-          <app-called-numbers-header
-            [calledNumbers]="calledNumbers()"
-            [lastCalled]="lastCalledNumber()"
-            [highlightNumber]="highlightCalledNumber()">
-          </app-called-numbers-header>
-        }
+          <!-- Called Numbers -->
+          @if (sessionId()) {
+            <app-called-numbers-header
+              [calledNumbers]="calledNumbers()"
+              [lastCalled]="lastCalledNumber()"
+              [highlightNumber]="highlightCalledNumber()">
+            </app-called-numbers-header>
+          }
+        </div>
 
         <!-- Main Body -->
         <div class="room-body">
@@ -384,6 +387,23 @@ interface SheetInfo {
         </app-challenge-overlay>
       }
 
+      <!-- Kinh Alert Popup (owner only) -->
+      @if (showKinhAlert()) {
+        <div class="kinh-alert-backdrop" (click)="dismissKinhAlert()">
+          <div class="kinh-alert-popup" (click)="$event.stopPropagation()">
+            <div class="kinh-alert-icon">🔔</div>
+            <h3 class="kinh-alert-title">Có người Hô KINH!</h3>
+            <div class="kinh-alert-names">
+              @for (name of kinhAlertClaimants(); track name) {
+                <span class="kinh-alert-name">{{ name }}</span>
+              }
+            </div>
+            <p class="kinh-alert-desc">Vui lòng kiểm tra và xác nhận bên dưới.</p>
+            <button class="kinh-alert-btn" (click)="scrollToVerify()">Xác Nhận & Xem Vé</button>
+          </div>
+        </div>
+      }
+
       <!-- Winner Overlay -->
       @if (winnerInfo()) {
         <app-winner-overlay
@@ -399,11 +419,12 @@ interface SheetInfo {
   `,
   styles: [`
     .room-container {
-      min-height: 100vh;
+      height: 100vh;
       background: #18191A;
       color: #E4E6EB;
       display: flex;
       flex-direction: column;
+      overflow-y: auto;
     }
     .loading {
       display: flex; flex-direction: column; align-items: center;
@@ -416,6 +437,9 @@ interface SheetInfo {
     @keyframes spin { to { transform: rotate(360deg); } }
     .loading p { color: #B0B3B8; }
 
+    .sticky-top {
+      position: sticky; top: 0; z-index: 100;
+    }
     .room-header {
       background: #242526; padding: 12px 20px; display: flex;
       align-items: center; justify-content: space-between; border-bottom: 1px solid #3A3B3C;
@@ -450,9 +474,10 @@ interface SheetInfo {
       background: #FA383E; border: none; color: white; padding: 6px 14px;
       border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit;
     }
-    .leave-btn:hover { background: #E5343A; }
-    .room-body { display: flex; flex: 1; overflow: hidden; }
-    .game-area { flex: 1; padding: 16px 20px; overflow-y: auto; }
+    .leave-btn:hover:not(:disabled) { background: #E5343A; }
+    .leave-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .room-body { display: flex; flex: 1; }
+    .game-area { flex: 1; padding: 16px 20px; }
     .tickets-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
     .tickets-header h3 { margin: 0; font-size: 16px; }
     .columns-selector { display: flex; gap: 4px; align-items: center; }
@@ -503,6 +528,46 @@ interface SheetInfo {
       font-size: 14px;
       text-align: center;
     }
+
+    /* Kinh Alert Popup */
+    .kinh-alert-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      z-index: 500; display: flex; align-items: center; justify-content: center;
+      animation: kinhAlertFadeIn 0.2s ease-out;
+    }
+    @keyframes kinhAlertFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .kinh-alert-popup {
+      background: #242526; border: 2px solid #FFD700; border-radius: 16px;
+      padding: 28px 32px; text-align: center; max-width: 360px; width: 90%;
+      box-shadow: 0 8px 40px rgba(255,215,0,0.3);
+      animation: kinhAlertPop 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes kinhAlertPop {
+      0% { transform: scale(0.8); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .kinh-alert-icon { font-size: 48px; margin-bottom: 8px; animation: kinhBell 0.5s ease-in-out 0.2s; }
+    @keyframes kinhBell {
+      0%, 100% { transform: rotate(0); }
+      20% { transform: rotate(15deg); }
+      40% { transform: rotate(-15deg); }
+      60% { transform: rotate(10deg); }
+      80% { transform: rotate(-10deg); }
+    }
+    .kinh-alert-title { margin: 0 0 12px; font-size: 20px; color: #FFD700; font-weight: 700; }
+    .kinh-alert-names { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 12px; }
+    .kinh-alert-name {
+      background: rgba(255,215,0,0.15); border: 1px solid #FFD700; color: #FFD700;
+      padding: 3px 10px; border-radius: 20px; font-size: 13px; font-weight: 600;
+    }
+    .kinh-alert-desc { color: #B0B3B8; font-size: 14px; margin: 0 0 16px; }
+    .kinh-alert-btn {
+      background: linear-gradient(135deg, #FFD700, #FFA500); color: #000; border: none;
+      padding: 10px 28px; border-radius: 8px; font-size: 15px; font-weight: 700;
+      cursor: pointer; font-family: inherit; transition: transform 0.15s;
+    }
+    .kinh-alert-btn:hover { transform: scale(1.04); }
+    .kinh-alert-btn:active { transform: scale(0.97); }
 
     .near-win-toast-stack {
       position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
@@ -628,6 +693,10 @@ export class RoomComponent implements OnInit, OnDestroy {
   showPlayerSheet = signal(false);
   showControlsSheet = signal(false);
 
+  // Kinh alert popup for owner
+  showKinhAlert = signal(false);
+  kinhAlertClaimants = signal<string[]>([]);
+
   // Room state
   room = signal<RoomData | null>(null);
   players = signal<Player[]>([]);
@@ -696,6 +765,12 @@ export class RoomComponent implements OnInit, OnDestroy {
     const room = this.room();
     return user && room ? user.id === room.ownerId : false;
   });
+  isGameInProgress = computed(() => {
+    const status = this.gameStatus();
+    const playing = status === 'active' || status === 'paused' || status === 'paused_for_kinh';
+    // Only block leaving if user has purchased tickets (is actually playing)
+    return playing && this.myTickets().length > 0;
+  });
 
   constructor() {
     afterNextRender(() => this.updateMaxColumns());
@@ -762,6 +837,7 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.kinhClaimantUserIds.set([]);
         this.kinhClaims.set([]);
         this.verifyClaims.set([]);
+        this.showKinhAlert.set(false);
         this.challengeActive.set(false);
         this.challengeCards.set([]);
         this.challengeParticipants.set([]);
@@ -796,14 +872,26 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.audioService.play('join');
       });
 
-    // Player left / disconnected
+    // Player left the room — remove from player list
     this.socketService
       .on<{ userId: number }>('room:player-left')
       .pipe(takeUntil(this.destroy$))
       .subscribe((data) => {
-        this.players.update((p) =>
-          p.map(x => x.userId === data.userId ? { ...x, isOnline: false } : x)
-        );
+        this.players.update((p) => p.filter(x => x.userId !== data.userId));
+      });
+
+    // Sheets released (when a player leaves, their purchased sheets become available)
+    this.socketService
+      .on<{ sheetIds: number[]; userId: number }>('sheet:released')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((data) => {
+        this.takenSheets.update((m) => {
+          const newMap = new Map(m);
+          for (const sheetId of data.sheetIds) {
+            newMap.delete(sheetId);
+          }
+          return newMap;
+        });
       });
 
     // Sheet taken
@@ -888,6 +976,7 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.kinhClaims.set([]);
         this.verifyClaims.set([]);
         this.highlightCalledNumber.set(null);
+        this.showKinhAlert.set(false);
         this.challengeActive.set(false);
         this.challengeCards.set([]);
         this.challengeParticipants.set([]);
@@ -911,6 +1000,12 @@ export class RoomComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe((data) => {
         this.verifyClaims.set(data.claims);
+        // Show alert popup for owner
+        if (this.isOwner() && data.claims.length > 0) {
+          this.kinhAlertClaimants.set(data.claims.map(c => c.displayName));
+          this.showKinhAlert.set(true);
+          this.audioService.play('kinh');
+        }
       });
 
     // Winner announcement
@@ -929,6 +1024,7 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.gameStatus.set('finished');
         this.kinhClaims.set([]);
         this.kinhClaimantUserIds.set([]);
+        this.showKinhAlert.set(false);
         this.challengeActive.set(false);
         this.challengeResult.set(null);
         this.winnerInfo.set({
@@ -1418,7 +1514,22 @@ export class RoomComponent implements OnInit, OnDestroy {
     return winCells;
   }
 
+  dismissKinhAlert() {
+    this.showKinhAlert.set(false);
+  }
+
+  scrollToVerify() {
+    this.showKinhAlert.set(false);
+    setTimeout(() => {
+      const el = document.querySelector('.verify-ticket-section');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+  }
+
   leaveRoom() {
+    if (this.isGameInProgress()) return;
     const room = this.room();
     if (room) {
       this.socketService.emit('room:leave', { roomId: room.id });

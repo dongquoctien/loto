@@ -104,6 +104,21 @@ interface Room {
                   inputmode="numeric" />
               </div>
             </div>
+            @if (callMode === 'auto') {
+              <div class="form-group">
+                <label>Thời gian kêu số (giây)</label>
+                <div class="interval-options">
+                  @for (opt of intervalOptions; track opt) {
+                    <button type="button"
+                      class="interval-btn"
+                      [class.active]="autoCallInterval === opt"
+                      (click)="autoCallInterval = opt">
+                      {{ opt }}s
+                    </button>
+                  }
+                </div>
+              </div>
+            }
             <div class="form-group">
               <label>Luật thắng (Kinh)</label>
               <div class="win-rules">
@@ -211,6 +226,14 @@ interface Room {
     .win-rules { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 4px; }
     .checkbox-label { display: flex; align-items: center; gap: 6px; color: #606770; font-size: 14px; cursor: pointer; }
     .checkbox-label input[type="checkbox"] { width: 18px; height: 18px; }
+    .interval-options { display: flex; gap: 8px; margin-top: 4px; }
+    .interval-btn {
+      flex: 1; padding: 8px 0; border: 2px solid #DDDFE2; border-radius: 8px;
+      background: white; color: #1C1E21; font-size: 15px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .interval-btn:hover { border-color: #1877F2; color: #1877F2; }
+    .interval-btn.active { background: #1877F2; color: white; border-color: #1877F2; }
     @media (max-width: 768px) {
       .join-form { flex-direction: column; }
       .join-form button { width: 100%; }
@@ -232,6 +255,8 @@ export class LobbyComponent implements OnInit {
   joinCode = '';
   roomName = '';
   callMode = 'auto';
+  autoCallInterval = 5;
+  intervalOptions = [2, 3, 5, 7];
   pricePerSheet = 10000;
   priceDisplay = '10,000';
   winHorizontal = true;
@@ -262,6 +287,7 @@ export class LobbyComponent implements OnInit {
       .post<Room>(`${environment.apiUrl}/rooms`, {
         name: this.roomName,
         callMode: this.callMode,
+        autoCallInterval: this.callMode === 'auto' ? this.autoCallInterval : undefined,
         pricePerSheet: this.pricePerSheet,
         winHorizontal: this.winHorizontal,
         winVertical: this.winVertical,

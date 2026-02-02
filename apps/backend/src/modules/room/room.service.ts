@@ -114,13 +114,7 @@ export class RoomService {
   }
 
   async leaveRoom(roomId: number, userId: number): Promise<void> {
-    const player = await this.roomPlayerRepository.findOne({
-      where: { roomId, userId },
-    });
-    if (player) {
-      player.isOnline = false;
-      await this.roomPlayerRepository.save(player);
-    }
+    await this.roomPlayerRepository.delete({ roomId, userId });
   }
 
   async deleteRoom(roomId: number): Promise<void> {

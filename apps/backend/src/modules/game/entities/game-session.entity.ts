@@ -14,6 +14,7 @@ import { PurchasedSheetEntity } from './purchased-sheet.entity';
 import { MarkedCellEntity } from './marked-cell.entity';
 import { GameResultEntity } from './game-result.entity';
 import { PenaltyEntity } from './penalty.entity';
+import { KinhClaimEntity } from './kinh-claim.entity';
 
 @Entity('game_sessions')
 export class GameSessionEntity {
@@ -51,6 +52,9 @@ export class GameSessionEntity {
 
   @OneToMany(() => PenaltyEntity, (p) => p.gameSession)
   penalties: PenaltyEntity[];
+
+  @OneToMany(() => KinhClaimEntity, (kc) => kc.gameSession)
+  kinhClaims: KinhClaimEntity[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
