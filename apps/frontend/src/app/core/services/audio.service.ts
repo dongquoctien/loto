@@ -7,7 +7,7 @@ export type VoicePack = 'default' | 'female' | 'male' | 'bede';
 export const VOICE_PACKS: { id: VoicePack; label: string; disabled?: boolean }[] = [
   { id: 'default', label: 'Web Audio API (Mặc định)' },
   { id: 'female', label: 'Nữ' },
-  { id: 'male', label: 'Nam', disabled: true },
+  { id: 'male', label: 'Nam' },
   { id: 'bede', label: 'Bê Đê', disabled: true },
 ];
 
