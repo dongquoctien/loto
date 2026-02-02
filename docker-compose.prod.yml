@@ -55,7 +55,7 @@ services:
       mysql:
         condition: service_healthy
     volumes:
-      - uploads_data:/app/uploads
+      - uploads_data:/app/apps/backend/uploads
     networks:
       - loto-internal
       - chatlingua_default

@@ -68,42 +68,54 @@ fi
 echo "Mode: Full deployment (build + start)"
 
 echo ""
-echo "Step 1: Pulling latest code..."
+echo "Step 1: Backup uploads from running container..."
+BACKUP_DIR="$LOTO_DIR/backups/uploads-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$BACKUP_DIR"
+if docker ps --format '{{.Names}}' | grep -q 'loto-backend'; then
+    docker cp loto-backend:/app/apps/backend/uploads/. "$BACKUP_DIR/" 2>/dev/null && \
+        echo "  Backed up uploads to $BACKUP_DIR" || \
+        echo "  No uploads to backup"
+else
+    echo "  Backend container not running, skipping backup"
+fi
+
+echo ""
+echo "Step 2: Pulling latest code..."
 git pull origin main
 
 echo ""
-echo "Step 2: Building Docker images..."
+echo "Step 3: Building Docker images..."
 docker compose -f $COMPOSE_FILE build --no-cache
 
 echo ""
-echo "Step 3: Stopping old Loto containers..."
+echo "Step 4: Stopping old Loto containers..."
 docker compose -f $COMPOSE_FILE down
 
 echo ""
-echo "Step 4: Copy nginx config to ChatLingua..."
+echo "Step 5: Copy nginx config to ChatLingua..."
 cp $LOTO_DIR/nginx/conf.d/loto.conf $CHATLINGUA_DIR/nginx/conf.d/loto.conf
 echo "  Copied loto.conf -> $CHATLINGUA_DIR/nginx/conf.d/"
 
 echo ""
-echo "Step 5: Starting Loto containers..."
+echo "Step 6: Starting Loto containers..."
 docker compose -f $COMPOSE_FILE up -d
 
 echo ""
-echo "Step 6: Waiting for services to start..."
+echo "Step 7: Waiting for services to start..."
 sleep 15
 
 echo ""
-echo "Step 7: Reloading ChatLingua nginx..."
+echo "Step 8: Reloading ChatLingua nginx..."
 docker exec chatlingua-nginx nginx -t && docker exec chatlingua-nginx nginx -s reload
 echo "  Nginx config test + reload OK"
 
 echo ""
-echo "Step 8: Health check..."
+echo "Step 9: Health check..."
 docker compose -f $COMPOSE_FILE ps
 
 # Check service health via ChatLingua nginx
 echo ""
-echo "Step 9: Verifying services..."
+echo "Step 10: Verifying services..."
 
 HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ${DOMAIN}" http://localhost/health 2>/dev/null || echo "000")
 API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ${DOMAIN}" http://localhost/api 2>/dev/null || echo "000")
@@ -118,7 +130,7 @@ if [ "$HEALTH_STATUS" != "200" ] && [ "$HEALTH_STATUS" != "301" ]; then
 fi
 
 echo ""
-echo "Step 10: Cleanup old images..."
+echo "Step 11: Cleanup old images..."
 docker image prune -f
 
 echo ""
