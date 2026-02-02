@@ -24,12 +24,14 @@ export class RoomService {
       name: dto.name,
       ownerId,
       callMode: dto.callMode || 'auto',
+      callVoice: dto.callVoice || 'default',
       autoCallInterval: dto.autoCallInterval || GAME_CONSTANTS.DEFAULT_AUTO_CALL_INTERVAL,
       pricePerSheet: dto.pricePerSheet || GAME_CONSTANTS.DEFAULT_PRICE_PER_SHEET,
       maxPlayers: dto.maxPlayers || GAME_CONSTANTS.DEFAULT_MAX_PLAYERS,
       winHorizontal: dto.winHorizontal ?? true,
       winVertical: dto.winVertical ?? false,
       winDiagonal: dto.winDiagonal ?? false,
+      allowHandsFree: dto.allowHandsFree ?? false,
     });
 
     const savedRoom = await this.roomRepository.save(room);

@@ -238,10 +238,10 @@ const COLOR_HEX: Record<string, { bg: string; border: string; text: string; name
     .btn-return {
       width: 100%;
       padding: 10px;
-      border: 2px solid #FF4444;
+      border: none;
       border-radius: 6px;
-      background: transparent;
-      color: #FF4444;
+      background: #FF4444;
+      color: white;
       font-size: 14px;
       font-weight: 700;
       cursor: pointer;
@@ -250,8 +250,7 @@ const COLOR_HEX: Record<string, { bg: string; border: string; text: string; name
       margin-top: 4px;
     }
     .btn-return:hover {
-      background: #FF4444;
-      color: white;
+      background:rgb(255, 57, 57);
     }
 
     /* Buyer info on taken sheets */

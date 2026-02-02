@@ -2,10 +2,24 @@ import { Injectable } from '@angular/core';
 
 type SoundType = 'number-called' | 'kinh' | 'winner' | 'mark' | 'error' | 'join' | 'start' | 'near-win';
 
+export type VoicePack = 'default' | 'female' | 'male' | 'bede';
+
+export const VOICE_PACKS: { id: VoicePack; label: string; disabled?: boolean }[] = [
+  { id: 'default', label: 'Web Audio API (Mặc định)' },
+  { id: 'female', label: 'Nữ' },
+  { id: 'male', label: 'Nam', disabled: true },
+  { id: 'bede', label: 'Bê Đê', disabled: true },
+];
+
 @Injectable({ providedIn: 'root' })
 export class AudioService {
   private audioContext: AudioContext | null = null;
   private enabled = true;
+
+  /** Cached voice audio buffers: voicePack -> number -> AudioBuffer */
+  private voiceCache = new Map<string, Map<number, AudioBuffer>>();
+  /** Track which voice packs are being preloaded */
+  private preloading = new Set<string>();
 
   private getContext(): AudioContext {
     if (!this.audioContext) {
@@ -21,6 +35,67 @@ export class AudioService {
 
   isEnabled(): boolean {
     return this.enabled;
+  }
+
+  /**
+   * Preload all 90 number audio files for a voice pack into cache.
+   * Called once when joining a room with a non-default voice.
+   */
+  preloadVoicePack(voice: VoicePack): void {
+    if (voice === 'default' || this.voiceCache.has(voice) || this.preloading.has(voice)) return;
+
+    this.preloading.add(voice);
+    const cache = new Map<number, AudioBuffer>();
+    const ctx = this.getContext();
+    let loaded = 0;
+
+    for (let n = 1; n <= 90; n++) {
+      const url = `/audio/voices/${voice}/${n}.wav`;
+      fetch(url)
+        .then((res) => res.arrayBuffer())
+        .then((buf) => ctx.decodeAudioData(buf))
+        .then((audioBuffer) => {
+          cache.set(n, audioBuffer);
+          loaded++;
+          if (loaded === 90) {
+            this.voiceCache.set(voice, cache);
+            this.preloading.delete(voice);
+          }
+        })
+        .catch(() => {
+          loaded++;
+          if (loaded === 90) {
+            this.voiceCache.set(voice, cache);
+            this.preloading.delete(voice);
+          }
+        });
+    }
+  }
+
+  /**
+   * Play a called number using the specified voice pack.
+   * Falls back to default tone if voice not loaded or voice is 'default'.
+   */
+  playNumberCalled(number: number, voice: VoicePack = 'default'): void {
+    if (!this.enabled) return;
+
+    try {
+      const ctx = this.getContext();
+      const cache = this.voiceCache.get(voice);
+      const buffer = cache?.get(number);
+
+      if (voice !== 'default' && buffer) {
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start();
+      } else {
+        // Default: synthesized tone
+        this.playTone(ctx, 880, 0.1, 'sine');
+      }
+    } catch {
+      // Audio not available
+    }
   }
 
   play(sound: SoundType) {

@@ -19,6 +19,10 @@ export class CreateRoomDto {
   callMode?: 'auto' | 'manual';
 
   @IsOptional()
+  @IsString()
+  callVoice?: string;
+
+  @IsOptional()
   @IsInt()
   @Min(2)
   @Max(30)
@@ -46,4 +50,8 @@ export class CreateRoomDto {
   @IsOptional()
   @IsBoolean()
   winDiagonal?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allowHandsFree?: boolean;
 }

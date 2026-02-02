@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../core/services/auth.service';
+import { VOICE_PACKS } from '../../core/services/audio.service';
 import { ProfileComponent } from '../profile/profile.component';
 import { environment } from '../../../environments/environment';
 
@@ -14,7 +15,13 @@ interface Room {
   ownerId: number;
   owner: { displayName: string; username: string };
   callMode: string;
+  callVoice: string;
+  autoCallInterval: number;
   pricePerSheet: number;
+  winHorizontal: boolean;
+  winVertical: boolean;
+  winDiagonal: boolean;
+  allowHandsFree: boolean;
   status: string;
   players: unknown[];
 }
@@ -95,6 +102,16 @@ interface Room {
                 </select>
               </div>
               <div class="form-group">
+                <label>Giọng kêu số</label>
+                <select [(ngModel)]="callVoice" name="callVoice">
+                  @for (v of voicePacks; track v.id) {
+                    <option [value]="v.id" [disabled]="v.disabled || false">{{ v.label }}{{ v.disabled ? ' (sắp có)' : '' }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
                 <label>Giá/tờ (VNĐ)</label>
                 <input type="text"
                   [ngModel]="priceDisplay"
@@ -136,6 +153,15 @@ interface Room {
                 </label>
               </div>
             </div>
+            <div class="form-group">
+              <label>Chế độ chơi</label>
+              <div class="win-rules">
+                <label class="checkbox-label">
+                  <input type="checkbox" [(ngModel)]="allowHandsFree" name="allowHF" />
+                  Cho phép Rảnh Tay
+                </label>
+              </div>
+            </div>
             <button type="submit" [disabled]="!roomName">Tạo Phòng</button>
           </form>
         </div>
@@ -144,12 +170,22 @@ interface Room {
           <h3>Phòng Đang Chờ ({{ rooms().length }})</h3>
           @for (room of rooms(); track room.id) {
             <div class="room-card" (click)="joinByCode(room.roomCode)">
-              <div class="room-name">{{ room.name }}</div>
-              <div class="room-info">
-                <span>Mã: {{ room.roomCode }}</span>
-                <span>Chủ: {{ room.owner?.displayName || room.owner?.username }}</span>
+              <div class="room-card-top">
+                <div class="room-name">{{ room.name }}</div>
+                <span class="room-code-badge">{{ room.roomCode }}</span>
+              </div>
+              <div class="room-meta">
+                <span>{{ room.owner?.displayName || room.owner?.username }}</span>
                 <span>{{ room.pricePerSheet | number }}đ/tờ</span>
                 <span>{{ room.players?.length || 0 }} người</span>
+              </div>
+              <div class="room-tags">
+                <span class="tag">{{ room.callMode === 'auto' ? '⏱ Tự động ' + room.autoCallInterval + 's' : '✋ Thủ công' }}</span>
+                <span class="tag">🎙 {{ getVoiceLabel(room.callVoice) }}</span>
+                <span class="tag">🏆 {{ getWinRules(room) }}</span>
+                @if (room.allowHandsFree) {
+                  <span class="tag tag-hf">🤖 Rảnh tay</span>
+                }
               </div>
             </div>
           } @empty {
@@ -204,7 +240,7 @@ interface Room {
       background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px;
       box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     }
-    h3 { margin-top: 0; color: #1C1E21; }
+    h3 { margin-top: 0; color: #1C1E21; padding: 8px 0;}
     .join-form { display: flex; gap: 8px; }
     .join-form input { flex: 1; padding: 10px; border: 1px solid #DDDFE2; border-radius: 6px; text-transform: uppercase; font-size: 18px; letter-spacing: 4px; text-align: center; }
     .join-form input:focus { outline: none; border-color: #1877F2; box-shadow: 0 0 0 2px rgba(24,119,242,0.2); }
@@ -218,10 +254,15 @@ interface Room {
     .form-row .form-group { flex: 1; }
     button[type="submit"] { width: 100%; padding: 10px; background: #1877F2; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600; transition: background 0.2s; }
     button[type="submit"]:hover { background: #166FE5; }
-    .room-card { padding: 12px; border: 1px solid #DDDFE2; border-radius: 8px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; }
+    .room-card { padding: 12px 14px; border: 1px solid #DDDFE2; border-radius: 10px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s; }
     .room-card:hover { border-color: #1877F2; background: #F0F7FF; }
-    .room-name { font-weight: 600; font-size: 16px; margin-bottom: 4px; color: #1C1E21; }
-    .room-info { display: flex; gap: 16px; color: #65676B; font-size: 13px; flex-wrap: wrap; }
+    .room-card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .room-name { font-weight: 600; font-size: 16px; color: #1C1E21; }
+    .room-code-badge { background: #1877F2; color: white; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 4px; letter-spacing: 0.5px; }
+    .room-meta { display: flex; gap: 12px; color: #65676B; font-size: 13px; flex-wrap: wrap; margin-bottom: 8px; }
+    .room-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tag { background: #F0F2F5; color: #4B4F56; font-size: 12px; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+    .tag-hf { background: #E8F5E9; color: #2E7D32; }
     .no-rooms { color: #65676B; text-align: center; }
     .win-rules { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 4px; }
     .checkbox-label { display: flex; align-items: center; gap: 6px; color: #606770; font-size: 14px; cursor: pointer; }
@@ -255,13 +296,16 @@ export class LobbyComponent implements OnInit {
   joinCode = '';
   roomName = '';
   callMode = 'auto';
+  callVoice = 'default';
+  voicePacks = VOICE_PACKS;
   autoCallInterval = 5;
   intervalOptions = [2, 3, 5, 7];
-  pricePerSheet = 10000;
-  priceDisplay = '10,000';
+  pricePerSheet = 5000;
+  priceDisplay = '5,000';
   winHorizontal = true;
   winVertical = false;
   winDiagonal = false;
+  allowHandsFree = false;
   showProfile = false;
   showUserMenu = false;
   isNewUser = false;
@@ -287,11 +331,13 @@ export class LobbyComponent implements OnInit {
       .post<Room>(`${environment.apiUrl}/rooms`, {
         name: this.roomName,
         callMode: this.callMode,
+        callVoice: this.callVoice,
         autoCallInterval: this.callMode === 'auto' ? this.autoCallInterval : undefined,
         pricePerSheet: this.pricePerSheet,
         winHorizontal: this.winHorizontal,
         winVertical: this.winVertical,
         winDiagonal: this.winDiagonal,
+        allowHandsFree: this.allowHandsFree,
       })
       .subscribe({
         next: (room) => {
@@ -317,6 +363,18 @@ export class LobbyComponent implements OnInit {
   formatPrice() {
     if (this.pricePerSheet < 1000) this.pricePerSheet = 1000;
     this.priceDisplay = this.pricePerSheet.toLocaleString('en-US');
+  }
+
+  getVoiceLabel(voiceId: string): string {
+    return VOICE_PACKS.find(v => v.id === voiceId)?.label ?? 'Mặc định';
+  }
+
+  getWinRules(room: Room): string {
+    const rules: string[] = [];
+    if (room.winHorizontal) rules.push('Ngang');
+    if (room.winVertical) rules.push('Dọc');
+    if (room.winDiagonal) rules.push('Chéo');
+    return rules.length ? rules.join(', ') : 'Ngang';
   }
 
   onProfileClosed() {

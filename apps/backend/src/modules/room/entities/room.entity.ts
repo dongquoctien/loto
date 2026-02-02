@@ -39,6 +39,14 @@ export class RoomEntity {
   callMode: 'auto' | 'manual';
 
   @Column({
+    name: 'call_voice',
+    type: 'varchar',
+    length: 50,
+    default: 'default',
+  })
+  callVoice: string;
+
+  @Column({
     name: 'auto_call_interval',
     type: 'int',
     default: 5,
@@ -79,6 +87,13 @@ export class RoomEntity {
     default: false,
   })
   winDiagonal: boolean;
+
+  @Column({
+    name: 'allow_hands_free',
+    type: 'boolean',
+    default: false,
+  })
+  allowHandsFree: boolean;
 
   @Column({
     type: 'enum',

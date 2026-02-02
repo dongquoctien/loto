@@ -24,11 +24,13 @@ interface RoomData {
   name: string;
   ownerId: number;
   callMode: string;
+  callVoice: string;
   autoCallInterval: number;
   pricePerSheet: number;
   winHorizontal: boolean;
   winVertical: boolean;
   winDiagonal: boolean;
+  allowHandsFree: boolean;
   status: string;
 }
 
@@ -92,7 +94,7 @@ interface SheetInfo {
               <span class="price-badge">{{ room()?.pricePerSheet | number:'1.0-0' }}đ/tờ</span>
             </div>
             <div class="room-actions">
-              @if (myTickets().length > 0 && gameStatus() !== 'preparing' && gameStatus() !== 'finished') {
+              @if (room()?.allowHandsFree && myTickets().length > 0 && gameStatus() !== 'preparing' && gameStatus() !== 'finished') {
                 <button class="hands-free-toggle" [class.active]="handsFreeMode()" (click)="toggleHandsFree()">
                   {{ handsFreeMode() ? '🤖 Rảnh Tay' : '✋ Thủ Công' }}
                 </button>
@@ -463,6 +465,7 @@ interface SheetInfo {
       100% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
     }
     .price-badge { background: #00A400; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; color: white; }
+
     .room-actions { display: flex; gap: 8px; align-items: center; }
     .hands-free-toggle {
       background: #3A3B3C; border: 1px solid #4E4F50; border-radius: 6px;
@@ -825,6 +828,11 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.players.set(data.players);
         this.availableSheets.set(data.sheets);
 
+        // Preload voice pack audio files
+        if (data.room.callVoice && data.room.callVoice !== 'default') {
+          this.audioService.preloadVoicePack(data.room.callVoice as any);
+        }
+
         if (data.purchasedSheets) {
           const map = new Map<number, number>();
           for (const [k, v] of Object.entries(data.purchasedSheets)) {
@@ -956,10 +964,11 @@ export class RoomComponent implements OnInit, OnDestroy {
       .subscribe((data) => {
         this.calledNumbers.set(data.calledNumbers);
         this.lastCalledNumber.set(data.number);
-        this.audioService.play('number-called');
+        const voice = (this.room()?.callVoice as any) || 'default';
+        this.audioService.playNumberCalled(data.number, voice);
 
-        // Hands-free mode: auto-mark + auto-KINH
-        if (this.handsFreeMode()) {
+        // Hands-free mode: auto-mark + auto-KINH (only if room allows it)
+        if (this.handsFreeMode() && this.room()?.allowHandsFree) {
           this.autoMarkNumber(data.number);
         }
       });

@@ -11,6 +11,10 @@ export class UpdateRoomDto {
   callMode?: 'auto' | 'manual';
 
   @IsOptional()
+  @IsString()
+  callVoice?: string;
+
+  @IsOptional()
   @IsNumber()
   @Min(2)
   @Max(30)
@@ -38,4 +42,8 @@ export class UpdateRoomDto {
   @IsOptional()
   @IsBoolean()
   winDiagonal?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allowHandsFree?: boolean;
 }
