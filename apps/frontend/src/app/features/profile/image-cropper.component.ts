@@ -18,8 +18,12 @@ import { CommonModule } from '@angular/common';
     <div class="cropper-overlay" (click)="cancel.emit()">
       <div class="cropper-modal" (click)="$event.stopPropagation()">
         <div class="cropper-header">
-          <h3>{{ title }}</h3>
-          <button class="close-btn" (click)="cancel.emit()">&times;</button>
+          <div class="cropper-header-title">
+            <div></div>
+            <h3>{{ title }}</h3>
+            <button class="close-btn" (click)="cancel.emit()">&times;</button>
+          </div>
+          
         </div>
 
         <div class="cropper-body">
@@ -94,6 +98,13 @@ import { CommonModule } from '@angular/common';
       justify-content: space-between;
       padding: 14px 20px;
       border-bottom: 1px solid #DDDFE2;
+      flex-direction: column;
+    }
+    .cropper-header-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
     }
     .cropper-header h3 { margin: 0; font-size: 17px; color: #1C1E21; }
     .close-btn {
