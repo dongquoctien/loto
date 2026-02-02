@@ -45,6 +45,8 @@ export class GameService {
   private gameStates = new Map<number, InMemoryGameState>();
   // Maps sessionId -> roomId for reverse lookups
   private sessionRoomMap = new Map<number, number>();
+  // Prevents concurrent session creation for the same room
+  private sessionCreationLocks = new Map<number, Promise<GameSessionEntity>>();
 
   constructor(
     @InjectRepository(GameSessionEntity)
@@ -96,6 +98,41 @@ export class GameService {
     });
 
     return savedSession;
+  }
+
+  /**
+   * Get the active session for a room, recover from DB, or create a new one.
+   * Uses a lock to prevent concurrent creation of duplicate sessions.
+   */
+  async getOrCreateSessionForRoom(
+    roomId: number,
+  ): Promise<{ sessionId: number; state: InMemoryGameState }> {
+    // 1. Check in-memory first
+    const existing = this.findSessionForRoom(roomId);
+    if (existing) return existing;
+
+    // 2. Try recovering from DB
+    const recovered = await this.recoverSessionForRoom(roomId);
+    if (recovered) return recovered;
+
+    // 3. Create new session with lock to prevent duplicates
+    if (this.sessionCreationLocks.has(roomId)) {
+      // Another request is already creating a session — wait for it
+      await this.sessionCreationLocks.get(roomId);
+      // After waiting, the session should exist in memory
+      const created = this.findSessionForRoom(roomId);
+      if (created) return created;
+    }
+
+    const creationPromise = this.createSession(roomId);
+    this.sessionCreationLocks.set(roomId, creationPromise);
+
+    try {
+      const session = await creationPromise;
+      return { sessionId: session.id, state: this.getState(session.id) };
+    } finally {
+      this.sessionCreationLocks.delete(roomId);
+    }
   }
 
   async purchaseSheet(

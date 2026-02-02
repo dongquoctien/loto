@@ -154,17 +154,9 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       let sessionData: { id: number; status: string; calledNumbers: number[] } | undefined;
       let purchasedSheetsMap: Record<string, number> | undefined;
 
-      // Find the latest active session for this room, or recover from DB, or auto-create one
-      let state = this.findActiveSessionForRoom(room.id);
-      if (!state) {
-        // Try recovering from DB (handles backend restart scenario)
-        state = await this.gameService.recoverSessionForRoom(room.id);
-      }
-      if (!state) {
-        // Auto-create a session in 'preparing' status so players can purchase sheets
-        const session = await this.gameService.createSession(room.id);
-        state = { sessionId: session.id, state: this.gameService.getState(session.id) };
-      }
+      // Find the active session for this room (in-memory, DB recovery, or auto-create)
+      // Uses lock to prevent duplicate session creation when multiple users join concurrently
+      const state = await this.gameService.getOrCreateSessionForRoom(room.id);
 
       sessionData = {
         id: state.sessionId,
