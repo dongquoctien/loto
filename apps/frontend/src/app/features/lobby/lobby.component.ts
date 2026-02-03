@@ -1,9 +1,11 @@
-import { Component, OnInit, signal, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
+import { Subject, takeUntil } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
+import { SocketService } from '../../core/services/socket.service';
 import { VOICE_PACKS } from '../../core/services/audio.service';
 import { ProfileComponent } from '../profile/profile.component';
 import { environment } from '../../../environments/environment';
@@ -24,6 +26,7 @@ interface Room {
   allowHandsFree: boolean;
   status: string;
   players: unknown[];
+  password: string | null;
 }
 
 @Component({
@@ -92,6 +95,13 @@ interface Room {
             <div class="form-group">
               <label>Tên phòng</label>
               <input [(ngModel)]="roomName" name="roomName" required />
+            </div>
+            <div class="form-group">
+              <label>Mật khẩu phòng (tùy chọn)</label>
+              <input type="password" [(ngModel)]="roomPassword" name="roomPassword" placeholder="Để trống nếu không cần" maxlength="50" />
+              @if (roomPassword && roomPassword.length > 0 && roomPassword.length < 4) {
+                <span class="field-hint error">Mật khẩu phải có ít nhất 4 ký tự</span>
+              }
             </div>
             <div class="form-row">
               <div class="form-group">
@@ -162,7 +172,7 @@ interface Room {
                 </label>
               </div>
             </div>
-            <button type="submit" [disabled]="!roomName">Tạo Phòng</button>
+            <button type="submit" [disabled]="!roomName || (roomPassword && roomPassword.length > 0 && roomPassword.length < 4)">Tạo Phòng</button>
           </form>
         </div>
 
@@ -172,6 +182,9 @@ interface Room {
             <div class="room-card" (click)="joinByCode(room.roomCode)">
               <div class="room-card-top">
                 <div class="room-name">{{ room.name }}</div>
+                @if (room.password) {
+                  <span class="lock-badge" title="Phòng có mật khẩu">🔒</span>
+                }
                 <span class="room-code-badge">{{ room.roomCode }}</span>
               </div>
               <div class="room-meta">
@@ -250,6 +263,8 @@ interface Room {
     .form-group label { display: block; margin-bottom: 4px; color: #606770; font-size: 14px; }
     .form-group input, .form-group select { width: 100%; padding: 8px; border: 1px solid #DDDFE2; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
     .form-group input:focus, .form-group select:focus { outline: none; border-color: #1877F2; box-shadow: 0 0 0 2px rgba(24,119,242,0.2); }
+    .field-hint { display: block; font-size: 12px; margin-top: 4px; }
+    .field-hint.error { color: #FA383E; }
     .form-row { display: flex; gap: 12px; }
     .form-row .form-group { flex: 1; }
     button[type="submit"] { width: 100%; padding: 10px; background: #1877F2; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600; transition: background 0.2s; }
@@ -259,6 +274,7 @@ interface Room {
     .room-card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
     .room-name { font-weight: 600; font-size: 16px; color: #1C1E21; }
     .room-code-badge { background: #1877F2; color: white; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 4px; letter-spacing: 0.5px; }
+    .lock-badge { font-size: 14px; }
     .room-meta { display: flex; gap: 12px; color: #65676B; font-size: 13px; flex-wrap: wrap; margin-bottom: 8px; }
     .room-tags { display: flex; gap: 6px; flex-wrap: wrap; }
     .tag { background: #F0F2F5; color: #4B4F56; font-size: 12px; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
@@ -285,11 +301,13 @@ interface Room {
     }
   `],
 })
-export class LobbyComponent implements OnInit {
+export class LobbyComponent implements OnInit, OnDestroy {
   private authService = inject(AuthService);
+  private socketService = inject(SocketService);
   private http = inject(HttpClient);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
+  private destroy$ = new Subject<void>();
 
   user = this.authService.user;
   rooms = signal<Room[]>([]);
@@ -306,18 +324,45 @@ export class LobbyComponent implements OnInit {
   winVertical = false;
   winDiagonal = false;
   allowHandsFree = false;
+  roomPassword = '';
   showProfile = false;
   showUserMenu = false;
   isNewUser = false;
 
   ngOnInit() {
     this.loadRooms();
+    this.setupSocketListeners();
 
     if (this.route.snapshot.queryParams['newUser'] === 'true') {
       this.isNewUser = true;
       this.showProfile = true;
       this.router.navigate([], { queryParams: {}, replaceUrl: true });
     }
+  }
+
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  private setupSocketListeners() {
+    this.socketService.connect();
+
+    // Listen for room creation
+    this.socketService
+      .on<Room>('room:created')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((room) => {
+        this.rooms.update((rooms) => [room, ...rooms]);
+      });
+
+    // Listen for room deletion (owner left)
+    this.socketService
+      .on<{ roomId: number }>('room:deleted')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(({ roomId }) => {
+        this.rooms.update((rooms) => rooms.filter((r) => r.id !== roomId));
+      });
   }
 
   loadRooms() {
@@ -330,6 +375,7 @@ export class LobbyComponent implements OnInit {
     this.http
       .post<Room>(`${environment.apiUrl}/rooms`, {
         name: this.roomName,
+        password: this.roomPassword && this.roomPassword.length >= 4 ? this.roomPassword : undefined,
         callMode: this.callMode,
         callVoice: this.callVoice,
         autoCallInterval: this.callMode === 'auto' ? this.autoCallInterval : undefined,

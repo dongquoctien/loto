@@ -7,12 +7,19 @@ import {
   Min,
   Max,
   MaxLength,
+  MinLength,
 } from 'class-validator';
 
 export class CreateRoomDto {
   @IsString()
   @MaxLength(100)
   name: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(4)
+  @MaxLength(50)
+  password?: string;
 
   @IsOptional()
   @IsEnum(['auto', 'manual'])

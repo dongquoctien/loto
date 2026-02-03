@@ -25,6 +25,9 @@ export class RoomPlayerEntity {
   @Column({ name: 'is_online', type: 'boolean', default: true })
   isOnline: boolean;
 
+  @Column({ name: 'is_ready', type: 'boolean', default: false })
+  isReady: boolean;
+
   @ManyToOne(() => RoomEntity, (room) => room.players, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'room_id' })
   room: RoomEntity;

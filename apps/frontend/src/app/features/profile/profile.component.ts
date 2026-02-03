@@ -14,11 +14,8 @@ import { ImageCropperComponent } from './image-cropper.component';
     <div class="overlay" (click)="isNewUser ? null : closed.emit()">
       <div class="profile-card" (click)="$event.stopPropagation()">
         <div class="modal-header">
-          <div></div>
           <h2>{{ isNewUser ? 'Chào Mừng Bạn!' : 'Hồ Sơ Cá Nhân' }}</h2>
-          @if (!isNewUser) {
-            <button class="close-btn" (click)="closed.emit()">&times;</button>
-          }
+         
         </div>
 
         @if (isNewUser) {
@@ -121,7 +118,7 @@ import { ImageCropperComponent } from './image-cropper.component';
     .modal-header {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: center;
       padding: 16px 24px;
       border-bottom: 1px solid #DDDFE2;
     }

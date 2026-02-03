@@ -6,6 +6,7 @@ interface Player {
   displayName: string;
   avatarUrl: string | null;
   isOnline: boolean;
+  isReady: boolean;
   winCount: number;
 }
 
@@ -33,6 +34,9 @@ interface Player {
             <div class="player-badges">
               @if (mePlayer.userId === ownerId) {
                 <span class="owner-badge">Chủ phòng</span>
+              }
+              @if (mePlayer.isReady && roomStatus === 'waiting' && mePlayer.userId !== ownerId) {
+                <span class="ready-badge">SẴN SÀNG</span>
               }
               @if (penalizedPlayers.has(mePlayer.userId)) {
                 <span class="penalty-badge">Phạt</span>
@@ -64,9 +68,11 @@ interface Player {
               @if (player.winCount > 0) { <span class="win-count-badge" [ngClass]="'rank-' + getRank(player.winCount)">{{ getRankIcon(player.winCount) }} {{ player.winCount }}</span> }
             </span>
             <div class="player-badges">
-
               @if (player.userId === ownerId) {
                 <span class="owner-badge">Chủ phòng</span>
+              }
+              @if (player.isReady && roomStatus === 'waiting' && player.userId !== ownerId) {
+                <span class="ready-badge">SẴN SÀNG</span>
               }
               @if (penalizedPlayers.has(player.userId)) {
                 <span class="penalty-badge">Phạt</span>
@@ -168,6 +174,31 @@ interface Player {
       font-weight: 600;
       animation: blink 1s ease-in-out infinite;
     }
+    .ready-badge {
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: #FFD700;
+      background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(255, 165, 0, 0.1));
+      border: 1px solid rgba(255, 215, 0, 0.5);
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-shadow: 0 0 8px rgba(255, 215, 0, 0.8), 0 0 16px rgba(255, 165, 0, 0.4);
+      box-shadow: 0 0 6px rgba(255, 215, 0, 0.3), inset 0 0 4px rgba(255, 215, 0, 0.1);
+      animation: readyPulse 1.5s ease-in-out infinite;
+    }
+    @keyframes readyPulse {
+      0%, 100% {
+        text-shadow: 0 0 8px rgba(255, 215, 0, 0.8), 0 0 16px rgba(255, 165, 0, 0.4);
+        box-shadow: 0 0 6px rgba(255, 215, 0, 0.3), inset 0 0 4px rgba(255, 215, 0, 0.1);
+        border-color: rgba(255, 215, 0, 0.5);
+      }
+      50% {
+        text-shadow: 0 0 12px rgba(255, 215, 0, 1), 0 0 24px rgba(255, 165, 0, 0.6);
+        box-shadow: 0 0 12px rgba(255, 215, 0, 0.5), inset 0 0 6px rgba(255, 215, 0, 0.2);
+        border-color: rgba(255, 215, 0, 0.8);
+      }
+    }
     .player-badges {
       display: flex;
       flex-wrap: wrap;
@@ -238,6 +269,7 @@ export class PlayerListComponent {
   @Input() penalizedPlayers: Set<number> = new Set();
   @Input() nearWinPlayers: Map<number, number> = new Map();
   @Input() kinhClaimantIds: number[] = [];
+  @Input() roomStatus: 'waiting' | 'playing' = 'waiting';
 
   get mePlayer(): Player | undefined {
     return this.players.find(p => p.userId === this.currentUserId);

@@ -57,6 +57,11 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly userService: UserService,
   ) {}
 
+  /** Broadcast room creation to all connected clients (for lobby updates) */
+  broadcastRoomCreated(room: unknown) {
+    this.server.emit('room:created', room);
+  }
+
   async handleConnection(client: AuthenticatedSocket) {
     try {
       const token =
@@ -121,12 +126,16 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('room:join')
   async handleJoinRoom(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() data: { roomCode: string },
+    @MessageBody() data: { roomCode: string; password?: string },
   ) {
     if (!client.userId) return;
 
     try {
-      const room = await this.roomService.joinRoom(data.roomCode, client.userId);
+      const room = await this.roomService.joinRoom(
+        data.roomCode,
+        client.userId,
+        data.password,
+      );
       client.currentRoomId = room.id;
       client.join(`room:${room.id}`);
 
@@ -189,6 +198,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
           displayName: p.user?.displayName || p.user?.username,
           avatarUrl: p.user?.avatarUrl,
           isOnline: p.isOnline,
+          isReady: p.isReady,
           winCount: p.user?.winCount ?? 0,
         })),
         sheets,
@@ -255,6 +265,9 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       // Delete room from DB
       await this.roomService.deleteRoom(data.roomId);
+
+      // Notify all clients (lobby) that room was deleted
+      this.server.emit('room:deleted', { roomId: data.roomId });
     } else {
       const activeSession = this.gameService.findSessionForRoom(data.roomId);
 
@@ -362,9 +375,74 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
           sheetIds: [data.sheetId],
           userId: client.userId,
         });
+
+        // Auto-unready when player returns a sheet and has no sheets left
+        const state = this.gameService.getState(data.sessionId);
+        const userSheetCount = [...state.purchasedSheets.values()].filter(
+          (uid) => uid === client.userId,
+        ).length;
+
+        if (userSheetCount === 0) {
+          await this.roomService.setPlayerReady(client.currentRoomId, client.userId, false);
+          this.server.to(`room:${client.currentRoomId}`).emit('player:ready-changed', {
+            userId: client.userId,
+            isReady: false,
+          });
+        }
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to return sheet';
+      client.emit('error', { message });
+    }
+  }
+
+  @SubscribeMessage('player:set-ready')
+  async handleSetReady(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { ready: boolean },
+  ) {
+    if (!client.userId || !client.currentRoomId) return;
+
+    try {
+      const room = await this.roomService.findById(client.currentRoomId);
+
+      // Owner không cần ready (họ có nút start)
+      if (room.ownerId === client.userId) {
+        client.emit('error', { message: 'Chủ phòng không cần sẵn sàng' });
+        return;
+      }
+
+      // Chỉ cho phép khi room đang waiting
+      if (room.status !== 'waiting') {
+        client.emit('error', { message: 'Game đã bắt đầu' });
+        return;
+      }
+
+      // Kiểm tra player đã mua tờ vé chưa
+      if (data.ready) {
+        const session = this.gameService.findSessionForRoom(client.currentRoomId);
+        if (session) {
+          const userSheetCount = [...session.state.purchasedSheets.values()].filter(
+            (uid) => uid === client.userId,
+          ).length;
+
+          if (userSheetCount === 0) {
+            client.emit('error', { message: 'Bạn cần mua ít nhất 1 tờ vé để sẵn sàng' });
+            return;
+          }
+        }
+      }
+
+      // Update database
+      await this.roomService.setPlayerReady(client.currentRoomId, client.userId, data.ready);
+
+      // Broadcast tới cả phòng
+      this.server.to(`room:${client.currentRoomId}`).emit('player:ready-changed', {
+        userId: client.userId,
+        isReady: data.ready,
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to set ready status';
       client.emit('error', { message });
     }
   }
@@ -401,6 +479,9 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       await this.gameService.startGame(sessionId);
+
+      // Reset all players' ready status when game starts
+      await this.roomService.resetAllPlayersReady(data.roomId);
 
       this.server.to(`room:${data.roomId}`).emit('game:started', {
         sessionId,
@@ -778,6 +859,9 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     // Full reset: cleanup old session + create fresh one
     const session = await this.gameService.resetGame(data.roomId);
+
+    // Reset all players' ready status when game resets
+    await this.roomService.resetAllPlayersReady(data.roomId);
 
     this.server.to(`room:${data.roomId}`).emit('game:reset', {
       sessionId: session.id,

@@ -1,11 +1,14 @@
 import { Component, OnInit, OnDestroy, signal, computed, inject, HostListener, afterNextRender } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { HttpClient } from '@angular/common/http';
 import { Subject, takeUntil } from 'rxjs';
 import { SocketService } from '../../core/services/socket.service';
 import { AuthService } from '../../core/services/auth.service';
 import { AudioService } from '../../core/services/audio.service';
 import { checkAllWins, TicketData as SharedTicketData } from '@loto/shared';
+import { environment } from '../../../environments/environment';
 
 import { KinhClaimOverlayItem, KinhVerifyClaimItem, ChallengeParticipant, ChallengeResultPayload } from '@loto/shared';
 import { TicketDisplayComponent } from './components/ticket-display/ticket-display.component';
@@ -39,6 +42,7 @@ interface Player {
   displayName: string;
   avatarUrl: string | null;
   isOnline: boolean;
+  isReady: boolean;
   winCount: number;
 }
 
@@ -61,6 +65,7 @@ interface SheetInfo {
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     TicketDisplayComponent,
     SheetSelectorComponent,
     CalledNumbersHeaderComponent,
@@ -73,12 +78,36 @@ interface SheetInfo {
   ],
   template: `
     <div class="room-container">
-      @if (!room()) {
+      <!-- Password Dialog -->
+      @if (showPasswordDialog()) {
+        <div class="password-dialog-backdrop">
+          <div class="password-dialog">
+            <h3>🔒 Phòng Yêu Cầu Mật Khẩu</h3>
+            <p>Nhập mật khẩu để vào phòng</p>
+            <input
+              type="password"
+              [(ngModel)]="roomPassword"
+              placeholder="Mật khẩu"
+              (keyup.enter)="submitPassword()"
+              autofocus
+            />
+            @if (passwordError()) {
+              <p class="password-error">{{ passwordError() }}</p>
+            }
+            <div class="password-dialog-actions">
+              <button class="btn-cancel" (click)="cancelPasswordDialog()">Hủy</button>
+              <button class="btn-submit" (click)="submitPassword()" [disabled]="!roomPassword">Vào Phòng</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      @if (!room() && !showPasswordDialog()) {
         <div class="loading">
           <div class="spinner"></div>
           <p>Đang kết nối phòng...</p>
         </div>
-      } @else {
+      } @else if (room()) {
         <!-- Sticky Top Area -->
         <div class="sticky-top">
           <!-- Header -->
@@ -131,6 +160,27 @@ interface SheetInfo {
                 (sheetSelected)="purchaseSheet($event)"
                 (sheetReturned)="returnSheet($event)">
               </app-sheet-selector>
+
+              <!-- Ready Button for non-owner players (desktop) -->
+              @if (!isOwner() && myTickets().length > 0) {
+                <div class="desktop-ready-section">
+                  <button
+                    class="desktop-ready-btn"
+                    [class.is-ready]="isCurrentUserReady()"
+                    (click)="toggleReady()">
+                    @if (isCurrentUserReady()) {
+                      <span class="ready-icon">✓</span>
+                      <span class="ready-text">ĐÃ SẴN SÀNG</span>
+                    } @else {
+                      <span class="ready-icon">⚡</span>
+                      <span class="ready-text">SẴN SÀNG</span>
+                    }
+                  </button>
+                  @if (!isCurrentUserReady()) {
+                    <p class="ready-hint">Nhấn để báo hiệu bạn đã sẵn sàng chơi</p>
+                  }
+                </div>
+              }
             }
 
             <!-- My Tickets -->
@@ -273,7 +323,8 @@ interface SheetInfo {
               [currentUserId]="currentUserId()"
               [penalizedPlayers]="penalizedPlayersSet()"
               [nearWinPlayers]="nearWinPlayers()"
-              [kinhClaimantIds]="kinhClaimantUserIds()">
+              [kinhClaimantIds]="kinhClaimantUserIds()"
+              [roomStatus]="gameStatus() === 'preparing' ? 'waiting' : 'playing'">
             </app-player-list>
           </div>
         </div>
@@ -284,6 +335,20 @@ interface SheetInfo {
             <span class="bar-icon">👥</span>
             <span class="bar-label">{{ players().length }}</span>
           </button>
+          @if (gameStatus() === 'preparing' && !isOwner() && myTickets().length > 0) {
+            <button
+              class="bar-ready-btn"
+              [class.is-ready]="isCurrentUserReady()"
+              (click)="toggleReady()">
+              @if (isCurrentUserReady()) {
+                <span class="bar-ready-icon">✓</span>
+                <span class="bar-ready-text">ĐÃ SẴN SÀNG</span>
+              } @else {
+                <span class="bar-ready-icon">⚡</span>
+                <span class="bar-ready-text">SẴN SÀNG</span>
+              }
+            </button>
+          }
           @if (gameStatus() === 'active' && !isPenalized() && myTickets().length > 0) {
             <div class="bar-kinh">
               <app-kinh-button
@@ -315,7 +380,8 @@ interface SheetInfo {
               [currentUserId]="currentUserId()"
               [penalizedPlayers]="penalizedPlayersSet()"
               [nearWinPlayers]="nearWinPlayers()"
-              [kinhClaimantIds]="kinhClaimantUserIds()">
+              [kinhClaimantIds]="kinhClaimantUserIds()"
+              [roomStatus]="gameStatus() === 'preparing' ? 'waiting' : 'playing'">
             </app-player-list>
           </div>
         </div>
@@ -429,6 +495,36 @@ interface SheetInfo {
       flex-direction: column;
       overflow-y: auto;
     }
+    /* Password Dialog */
+    .password-dialog-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+      z-index: 1000; display: flex; align-items: center; justify-content: center;
+    }
+    .password-dialog {
+      background: #242526; border-radius: 16px; padding: 24px 32px;
+      max-width: 360px; width: 90%; text-align: center;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+    }
+    .password-dialog h3 { margin: 0 0 8px; font-size: 20px; color: #E4E6EB; }
+    .password-dialog p { margin: 0 0 16px; color: #B0B3B8; font-size: 14px; }
+    .password-dialog input {
+      width: 100%; padding: 12px; border: 1px solid #3A3B3C;
+      border-radius: 8px; background: #3A3B3C; color: #E4E6EB;
+      font-size: 16px; text-align: center; box-sizing: border-box;
+    }
+    .password-dialog input:focus { outline: none; border-color: #1877F2; }
+    .password-error { color: #FA383E; font-size: 13px; margin: 8px 0 0; }
+    .password-dialog-actions { display: flex; gap: 12px; margin-top: 20px; }
+    .password-dialog-actions button {
+      flex: 1; padding: 10px 16px; border-radius: 8px; font-size: 15px;
+      font-weight: 600; cursor: pointer; font-family: inherit; border: none;
+    }
+    .btn-cancel { background: #3A3B3C; color: #E4E6EB; }
+    .btn-cancel:hover { background: #4E4F50; }
+    .btn-submit { background: #1877F2; color: white; }
+    .btn-submit:hover:not(:disabled) { background: #166FE5; }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
     .loading {
       display: flex; flex-direction: column; align-items: center;
       justify-content: center; height: 100vh; gap: 16px;
@@ -531,6 +627,70 @@ interface SheetInfo {
       margin: 12px 0;
       font-size: 14px;
       text-align: center;
+    }
+
+    /* Desktop Ready Button Section */
+    .desktop-ready-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 24px 0;
+      padding: 16px;
+    }
+    .desktop-ready-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 16px 40px;
+      border-radius: 12px;
+      border: 2px solid #4A4B4C;
+      background: linear-gradient(135deg, #3A3B3C 0%, #2D2E2F 100%);
+      color: #B0B3B8;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.3s ease;
+    }
+    .desktop-ready-btn:hover {
+      background: linear-gradient(135deg, #4A4B4C 0%, #3A3B3C 100%);
+      border-color: #5A5B5C;
+      transform: scale(1.02);
+    }
+    .desktop-ready-btn.is-ready {
+      background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+      border-color: #FFE44D;
+      color: #000000;
+      box-shadow: 0 0 25px rgba(255, 215, 0, 0.5), 0 0 50px rgba(255, 165, 0, 0.3), inset 0 0 20px rgba(255, 255, 255, 0.2);
+      animation: desktopReadyPulse 2s ease-in-out infinite;
+    }
+    .desktop-ready-btn.is-ready:hover {
+      background: linear-gradient(135deg, #FFE14D 0%, #FFB732 100%);
+      transform: scale(1.02);
+    }
+    .desktop-ready-btn .ready-icon {
+      font-size: 22px;
+    }
+    .desktop-ready-btn .ready-text {
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    }
+    .desktop-ready-btn.is-ready .ready-text {
+      text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+    .desktop-ready-section .ready-hint {
+      margin: 10px 0 0;
+      font-size: 13px;
+      color: #65676B;
+    }
+    @keyframes desktopReadyPulse {
+      0%, 100% {
+        box-shadow: 0 0 25px rgba(255, 215, 0, 0.5), 0 0 50px rgba(255, 165, 0, 0.3), inset 0 0 20px rgba(255, 255, 255, 0.2);
+      }
+      50% {
+        box-shadow: 0 0 35px rgba(255, 215, 0, 0.7), 0 0 70px rgba(255, 165, 0, 0.4), inset 0 0 30px rgba(255, 255, 255, 0.25);
+      }
     }
 
     /* Kinh Alert Popup */
@@ -656,6 +816,47 @@ interface SheetInfo {
     .bar-kinh ::ng-deep .kinh-main-btn:hover:not(:disabled) { transform: none !important; }
     .bar-kinh ::ng-deep .win-detected-info, .bar-kinh ::ng-deep .no-win-hint { display: none !important; }
 
+    /* Mobile Ready Button */
+    .bar-ready-btn {
+      flex: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 48px;
+      border-radius: 12px;
+      border: 2px solid #4A4B4C;
+      background: linear-gradient(135deg, #3A3B3C 0%, #2D2E2F 100%);
+      color: #B0B3B8;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.3s ease;
+    }
+    .bar-ready-btn.is-ready {
+      background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+      border-color: #FFE44D;
+      color: #000000;
+      box-shadow: 0 0 15px rgba(255, 215, 0, 0.5), 0 0 30px rgba(255, 165, 0, 0.3);
+      animation: barReadyPulse 2s ease-in-out infinite;
+    }
+    .bar-ready-icon {
+      font-size: 16px;
+    }
+    .bar-ready-text {
+      font-size: 12px;
+    }
+    @keyframes barReadyPulse {
+      0%, 100% {
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.5), 0 0 30px rgba(255, 165, 0, 0.3);
+      }
+      50% {
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.7), 0 0 40px rgba(255, 165, 0, 0.4);
+      }
+    }
+
     /* Desktop: hide mobile elements */
     .desktop-player-list { display: contents; }
 
@@ -673,7 +874,7 @@ interface SheetInfo {
       .room-body { flex-direction: column; }
       .my-tickets { margin-bottom: 8px; }
       .tickets-header h3 { font-size: 14px; }
-      .desktop-player-list, .inline-kinh, .inline-controls { display: none; }
+      .desktop-player-list, .inline-kinh, .inline-controls, .desktop-ready-section { display: none; }
       .mobile-bottom-bar { display: flex; }
       .sheet-backdrop { display: block; }
       .room-container { padding-bottom: 68px; }
@@ -688,9 +889,16 @@ export class RoomComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private http = inject(HttpClient);
   private socketService = inject(SocketService);
   private authService = inject(AuthService);
   private audioService = inject(AudioService);
+
+  // Password dialog state
+  showPasswordDialog = signal(false);
+  passwordError = signal<string | null>(null);
+  roomPassword = '';
+  private pendingRoomCode: string | null = null;
 
   // UI state (mobile)
   copiedRoomCode = signal(false);
@@ -775,6 +983,11 @@ export class RoomComponent implements OnInit, OnDestroy {
     // Only block leaving if user has purchased tickets (is actually playing)
     return playing && this.myTickets().length > 0;
   });
+  isCurrentUserReady = computed(() => {
+    const userId = this.currentUserId();
+    const player = this.players().find(p => p.userId === userId);
+    return player?.isReady ?? false;
+  });
 
   constructor() {
     afterNextRender(() => this.updateMaxColumns());
@@ -784,7 +997,7 @@ export class RoomComponent implements OnInit, OnDestroy {
     this.socketService.connect();
     const roomCode = this.route.snapshot.paramMap.get('code');
     if (roomCode) {
-      this.socketService.emit('room:join', { roomCode });
+      this.checkAndJoinRoom(roomCode);
     }
     this.setupSocketListeners();
 
@@ -818,12 +1031,55 @@ export class RoomComponent implements OnInit, OnDestroy {
     }
   }
 
+  private checkAndJoinRoom(roomCode: string) {
+    // Check if room has password
+    this.http.get<{ hasPassword: boolean }>(`${environment.apiUrl}/rooms/${roomCode}/has-password`).subscribe({
+      next: (res) => {
+        if (res.hasPassword) {
+          // Show password dialog
+          this.pendingRoomCode = roomCode;
+          this.showPasswordDialog.set(true);
+        } else {
+          // Join directly
+          this.socketService.emit('room:join', { roomCode });
+        }
+      },
+      error: () => {
+        // Room not found or error, try to join anyway and let socket handle the error
+        this.socketService.emit('room:join', { roomCode });
+      },
+    });
+  }
+
+  submitPassword() {
+    if (!this.pendingRoomCode || !this.roomPassword) return;
+    this.passwordError.set(null);
+    this.socketService.emit('room:join', {
+      roomCode: this.pendingRoomCode,
+      password: this.roomPassword,
+    });
+  }
+
+  cancelPasswordDialog() {
+    this.showPasswordDialog.set(false);
+    this.pendingRoomCode = null;
+    this.roomPassword = '';
+    this.passwordError.set(null);
+    this.router.navigate(['/lobby']);
+  }
+
   private setupSocketListeners() {
     // Room joined
     this.socketService
       .on<{ room: RoomData; players: Player[]; sheets: SheetInfo[]; session?: { id: number; status: string; calledNumbers: number[] }; purchasedSheets?: Record<string, number> }>('room:joined')
       .pipe(takeUntil(this.destroy$))
       .subscribe((data) => {
+        // Close password dialog on successful join
+        this.showPasswordDialog.set(false);
+        this.pendingRoomCode = null;
+        this.roomPassword = '';
+        this.passwordError.set(null);
+
         this.room.set(data.room);
         this.players.set(data.players);
         this.availableSheets.set(data.sheets);
@@ -876,9 +1132,23 @@ export class RoomComponent implements OnInit, OnDestroy {
       .subscribe((data) => {
         this.players.update((p) => [
           ...p.filter(x => x.userId !== data.userId),
-          { userId: data.userId, displayName: data.displayName, avatarUrl: data.avatarUrl, isOnline: true, winCount: data.winCount ?? 0 },
+          { userId: data.userId, displayName: data.displayName, avatarUrl: data.avatarUrl, isOnline: true, isReady: false, winCount: data.winCount ?? 0 },
         ]);
         this.audioService.play('join');
+      });
+
+    // Player ready status changed
+    this.socketService
+      .on<{ userId: number; isReady: boolean }>('player:ready-changed')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((data) => {
+        this.players.update((p) =>
+          p.map(player =>
+            player.userId === data.userId
+              ? { ...player, isReady: data.isReady }
+              : player
+          )
+        );
       });
 
     // Player left the room — remove from player list
@@ -952,6 +1222,8 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.kinhClaims.set([]);
         this.verifyClaims.set([]);
         this.challengeActive.set(false);
+        // Reset all players' ready status
+        this.players.update((p) => p.map(player => ({ ...player, isReady: false })));
         // Sync auto-call checkbox with room's callMode
         this.autoCallEnabled.set(this.room()?.callMode === 'auto');
         this.audioService.play('start');
@@ -1162,6 +1434,8 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.challengeParticipants.set([]);
         this.challengeMyPick.set(null);
         this.challengeResult.set(null);
+        // Reset all players' ready status
+        this.players.update((p) => p.map(player => ({ ...player, isReady: false })));
       });
 
     // Challenge started
@@ -1225,6 +1499,23 @@ export class RoomComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe((data) => {
         console.error('Socket error:', data.message);
+
+        // Handle password errors
+        if (data.message === 'Password required' || data.message === 'Invalid password') {
+          this.passwordError.set(data.message === 'Password required'
+            ? 'Phòng này yêu cầu mật khẩu'
+            : 'Mật khẩu không đúng');
+          // If dialog was not shown (e.g., direct join attempt), show it now
+          if (!this.showPasswordDialog()) {
+            const roomCode = this.route.snapshot.paramMap.get('code');
+            if (roomCode) {
+              this.pendingRoomCode = roomCode;
+              this.showPasswordDialog.set(true);
+            }
+          }
+          return;
+        }
+
         this.audioService.play('error');
       });
   }
@@ -1379,6 +1670,11 @@ export class RoomComponent implements OnInit, OnDestroy {
 
   toggleHandsFree() {
     this.handsFreeMode.update((v) => !v);
+  }
+
+  toggleReady() {
+    const newReady = !this.isCurrentUserReady();
+    this.socketService.emit('player:set-ready', { ready: newReady });
   }
 
   copyRoomCode() {

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { GameSessionEntity } from './entities/game-session.entity';
 import { CalledNumberEntity } from './entities/called-number.entity';
@@ -23,7 +23,7 @@ import { RoomModule } from '../room/room.module';
       KinhClaimEntity,
     ]),
     TicketModule,
-    RoomModule,
+    forwardRef(() => RoomModule),
   ],
   providers: [GameService],
   exports: [GameService],

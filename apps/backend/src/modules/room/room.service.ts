@@ -1,6 +1,12 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import * as bcrypt from 'bcrypt';
 import { RoomEntity } from './entities/room.entity';
 import { RoomPlayerEntity } from './entities/room-player.entity';
 import { CreateRoomDto } from './dto/create-room.dto';
@@ -19,10 +25,17 @@ export class RoomService {
   async createRoom(ownerId: number, dto: CreateRoomDto): Promise<RoomEntity> {
     const roomCode = this.generateRoomCode();
 
+    // Hash password if provided
+    let hashedPassword: string | null = null;
+    if (dto.password) {
+      hashedPassword = await bcrypt.hash(dto.password, 10);
+    }
+
     const room = this.roomRepository.create({
       roomCode,
       name: dto.name,
       ownerId,
+      password: hashedPassword,
       callMode: dto.callMode || 'auto',
       callVoice: dto.callVoice || 'default',
       autoCallInterval: dto.autoCallInterval || GAME_CONSTANTS.DEFAULT_AUTO_CALL_INTERVAL,
@@ -86,14 +99,30 @@ export class RoomService {
     return this.roomRepository.save(room);
   }
 
-  async joinRoom(roomCode: string, userId: number): Promise<RoomEntity> {
+  async joinRoom(
+    roomCode: string,
+    userId: number,
+    password?: string,
+  ): Promise<RoomEntity> {
     const room = await this.findByCode(roomCode);
 
     const existing = await this.roomPlayerRepository.findOne({
       where: { roomId: room.id, userId },
     });
 
+    // If not already a member, validate password (if room has one)
     if (!existing) {
+      // Check password for new joiners (owner doesn't need password)
+      if (room.password && room.ownerId !== userId) {
+        if (!password) {
+          throw new UnauthorizedException('Password required');
+        }
+        const isValid = await bcrypt.compare(password, room.password);
+        if (!isValid) {
+          throw new UnauthorizedException('Invalid password');
+        }
+      }
+
       const playerCount = await this.roomPlayerRepository.count({
         where: { roomId: room.id },
       });
@@ -115,6 +144,14 @@ export class RoomService {
     return this.findById(room.id);
   }
 
+  async hasPassword(roomCode: string): Promise<boolean> {
+    const room = await this.roomRepository.findOne({
+      where: { roomCode },
+      select: ['password'],
+    });
+    return !!room?.password;
+  }
+
   async leaveRoom(roomId: number, userId: number): Promise<void> {
     await this.roomPlayerRepository.delete({ roomId, userId });
   }
@@ -128,6 +165,18 @@ export class RoomService {
   async isOwner(roomId: number, userId: number): Promise<boolean> {
     const room = await this.roomRepository.findOne({ where: { id: roomId } });
     return room ? room.ownerId === userId : false;
+  }
+
+  async setPlayerReady(roomId: number, userId: number, isReady: boolean): Promise<void> {
+    await this.roomPlayerRepository.update({ roomId, userId }, { isReady });
+  }
+
+  async resetAllPlayersReady(roomId: number): Promise<void> {
+    await this.roomPlayerRepository.update({ roomId }, { isReady: false });
+  }
+
+  async setPlayerOffline(roomId: number, userId: number): Promise<void> {
+    await this.roomPlayerRepository.update({ roomId, userId }, { isOnline: false, isReady: false });
   }
 
   private generateRoomCode(): string {

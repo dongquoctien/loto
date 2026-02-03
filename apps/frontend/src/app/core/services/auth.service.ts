@@ -1,7 +1,7 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { tap } from 'rxjs';
+import { Subject, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
 interface AuthUser {
@@ -22,6 +22,14 @@ interface AuthResponse {
 export class AuthService {
   private currentUser = signal<AuthUser | null>(null);
   private token = signal<string | null>(null);
+
+  /** Emits when user logs out - SocketService listens to disconnect */
+  private logoutSubject = new Subject<void>();
+  readonly onLogout$ = this.logoutSubject.asObservable();
+
+  /** Emits when user logs in - SocketService listens to reconnect with new token */
+  private loginSubject = new Subject<void>();
+  readonly onLogin$ = this.loginSubject.asObservable();
 
   readonly user = this.currentUser.asReadonly();
   readonly isLoggedIn = computed(() => !!this.token());
@@ -54,6 +62,7 @@ export class AuthService {
   }
 
   logout() {
+    this.logoutSubject.next(); // Notify SocketService to disconnect
     this.currentUser.set(null);
     this.token.set(null);
     localStorage.removeItem('auth_token');
@@ -75,6 +84,7 @@ export class AuthService {
     this.token.set(response.token);
     localStorage.setItem('auth_token', response.token);
     localStorage.setItem('auth_user', JSON.stringify(response.user));
+    this.loginSubject.next(); // Notify SocketService to reconnect with new token
   }
 
   private loadFromStorage() {

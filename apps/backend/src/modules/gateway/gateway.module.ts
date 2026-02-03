@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { GameGateway } from './game.gateway';
@@ -17,10 +17,11 @@ import { UserModule } from '../user/user.module';
       }),
     }),
     GameModule,
-    RoomModule,
+    forwardRef(() => RoomModule),
     TicketModule,
     UserModule,
   ],
   providers: [GameGateway],
+  exports: [GameGateway],
 })
 export class GatewayModule {}

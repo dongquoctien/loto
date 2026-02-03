@@ -1,6 +1,6 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
-import { Observable, Subject, BehaviorSubject } from 'rxjs';
+import { Observable, Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AuthService } from './auth.service';
 
@@ -18,7 +18,20 @@ export class SocketService implements OnDestroy {
   private connectionState$ = new BehaviorSubject<'connected' | 'disconnected' | 'reconnecting'>('disconnected');
   readonly connectionState = this.connectionState$.asObservable();
 
-  constructor(private authService: AuthService) {}
+  constructor(private authService: AuthService) {
+    // Listen for logout to disconnect socket
+    this.authService.onLogout$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      console.log('User logged out, disconnecting socket');
+      this.disconnect();
+    });
+
+    // Listen for login to reconnect socket with new token
+    this.authService.onLogin$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      console.log('User logged in, reconnecting socket with new token');
+      this.disconnect(); // Ensure old socket is fully disconnected
+      this.connect(); // Connect with new token
+    });
+  }
 
   connect(): void {
     if (this.socket?.connected) return;

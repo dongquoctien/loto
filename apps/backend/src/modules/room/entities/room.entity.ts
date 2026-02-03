@@ -96,6 +96,14 @@ export class RoomEntity {
   allowHandsFree: boolean;
 
   @Column({
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+    default: null,
+  })
+  password: string | null;
+
+  @Column({
     type: 'enum',
     enum: ['waiting', 'playing', 'closed'],
     default: 'waiting',
