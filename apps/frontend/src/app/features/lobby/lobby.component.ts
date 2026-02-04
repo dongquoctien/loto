@@ -94,11 +94,11 @@ interface Room {
           <form (ngSubmit)="createRoom()">
             <div class="form-group">
               <label>Tên phòng</label>
-              <input [(ngModel)]="roomName" name="roomName" required />
+              <input [(ngModel)]="roomName" name="roomName" required autocomplete="off" />
             </div>
             <div class="form-group">
               <label>Mật khẩu phòng (tùy chọn)</label>
-              <input type="password" [(ngModel)]="roomPassword" name="roomPassword" placeholder="Để trống nếu không cần" maxlength="50" />
+              <input  [(ngModel)]="roomPassword" name="roomPassword" placeholder="Để trống nếu không cần" maxlength="50" autocomplete="new-password" />
               @if (roomPassword && roomPassword.length > 0 && roomPassword.length < 4) {
                 <span class="field-hint error">Mật khẩu phải có ít nhất 4 ký tự</span>
               }

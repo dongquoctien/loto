@@ -50,7 +50,7 @@ export class AudioService {
     let loaded = 0;
 
     for (let n = 1; n <= 90; n++) {
-      const url = `/audio/voices/${voice}/${n}.wav`;
+      const url = `/audio/voices/${voice}/${n}.mp3`;
       fetch(url)
         .then((res) => res.arrayBuffer())
         .then((buf) => ctx.decodeAudioData(buf))

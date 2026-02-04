@@ -89,6 +89,7 @@ interface SheetInfo {
               [(ngModel)]="roomPassword"
               placeholder="Mật khẩu"
               (keyup.enter)="submitPassword()"
+              autocomplete="new-password"
               autofocus
             />
             @if (passwordError()) {
@@ -1032,23 +1033,12 @@ export class RoomComponent implements OnInit, OnDestroy {
   }
 
   private checkAndJoinRoom(roomCode: string) {
-    // Check if room has password
-    this.http.get<{ hasPassword: boolean }>(`${environment.apiUrl}/rooms/${roomCode}/has-password`).subscribe({
-      next: (res) => {
-        if (res.hasPassword) {
-          // Show password dialog
-          this.pendingRoomCode = roomCode;
-          this.showPasswordDialog.set(true);
-        } else {
-          // Join directly
-          this.socketService.emit('room:join', { roomCode });
-        }
-      },
-      error: () => {
-        // Room not found or error, try to join anyway and let socket handle the error
-        this.socketService.emit('room:join', { roomCode });
-      },
-    });
+    // Try to join directly - backend will check if password is needed
+    // If user is owner, they'll be allowed in without password
+    // If password is required and user is not owner, socket will return error
+    // and we'll show the password dialog then
+    this.pendingRoomCode = roomCode;
+    this.socketService.emit('room:join', { roomCode });
   }
 
   submitPassword() {
