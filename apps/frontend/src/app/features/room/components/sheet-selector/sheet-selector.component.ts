@@ -25,8 +25,6 @@ const COLOR_HEX: Record<string, { bg: string; border: string; text: string; name
   green: { bg: '#3CB371', border: '#339E63', text: '#fff', nameVi: 'Xanh lá' },
   lime: { bg: '#9ACD32', border: '#8AB92E', text: '#fff', nameVi: 'Xanh non' },
   red: { bg: '#DC143C', border: '#C01234', text: '#fff', nameVi: 'Đỏ' },
-  teal: { bg: '#008080', border: '#006666', text: '#fff', nameVi: 'Xanh ngọc' },
-  brown: { bg: '#8B4513', border: '#6E3610', text: '#fff', nameVi: 'Nâu' },
 };
 
 @Component({

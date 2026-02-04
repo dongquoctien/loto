@@ -120,7 +120,7 @@ export class AudioService {
           this.playTone(ctx, 200, 0.2, 'sawtooth');
           break;
         case 'join':
-          this.playTone(ctx, 440, 0.1, 'sine');
+          this.playTingTing(ctx);
           break;
         case 'start':
           this.playSequence(ctx, [440, 550, 660], 0.15);
@@ -161,6 +161,60 @@ export class AudioService {
       osc.start(startTime);
       osc.stop(startTime + noteDuration);
     });
+  }
+
+  /**
+   * Ting Ting sound: two bell-like tones for player join notification.
+   * Creates a pleasant, attention-grabbing chime.
+   */
+  private playTingTing(ctx: AudioContext) {
+    const now = ctx.currentTime;
+
+    // Two "ting" sounds with bell-like overtones
+    const tings = [
+      { start: 0, freq: 1760 },      // A6 - first ting
+      { start: 0.12, freq: 2093 },   // C7 - second ting (higher)
+    ];
+
+    for (const ting of tings) {
+      const t = now + ting.start;
+
+      // Main tone (sine for pure bell sound)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.value = ting.freq;
+      gain1.gain.setValueAtTime(0.2, t);
+      gain1.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(t);
+      osc1.stop(t + 0.35);
+
+      // Harmonic overtone (octave + fifth above, quieter)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.value = ting.freq * 3; // 3rd harmonic
+      gain2.gain.setValueAtTime(0.06, t);
+      gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(t);
+      osc2.stop(t + 0.2);
+
+      // Soft shimmer (very high, quick decay)
+      const osc3 = ctx.createOscillator();
+      const gain3 = ctx.createGain();
+      osc3.type = 'sine';
+      osc3.frequency.value = ting.freq * 5;
+      gain3.gain.setValueAtTime(0.03, t);
+      gain3.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+      osc3.connect(gain3);
+      gain3.connect(ctx.destination);
+      osc3.start(t);
+      osc3.stop(t + 0.1);
+    }
   }
 
   /**

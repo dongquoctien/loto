@@ -12,6 +12,7 @@ import { environment } from '../../../environments/environment';
 
 import { KinhClaimOverlayItem, KinhVerifyClaimItem, ChallengeParticipant, ChallengeResultPayload } from '@loto/shared';
 import { TicketDisplayComponent } from './components/ticket-display/ticket-display.component';
+import { SheetDisplayComponent } from './components/sheet-display/sheet-display.component';
 import { SheetSelectorComponent } from './components/sheet-selector/sheet-selector.component';
 import { CalledNumbersHeaderComponent } from './components/called-numbers-header/called-numbers-header.component';
 import { GameControlsComponent } from './components/game-controls/game-controls.component';
@@ -67,6 +68,7 @@ interface SheetInfo {
     CommonModule,
     FormsModule,
     TicketDisplayComponent,
+    SheetDisplayComponent,
     SheetSelectorComponent,
     CalledNumbersHeaderComponent,
     GameControlsComponent,
@@ -184,34 +186,23 @@ interface SheetInfo {
               }
             }
 
-            <!-- My Tickets -->
-            @if (myTickets().length > 0) {
-              <div class="my-tickets">
-                <div class="tickets-header">
-                  <h3>Vé Của Bạn</h3>
-                  @if (maxColumns() > 1) {
-                    <div class="columns-selector">
-                      @for (n of columnOptions(); track n) {
-                        <button
-                          class="col-btn"
-                          [class.active]="ticketColumns() === n"
-                          (click)="ticketColumns.set(n)">
-                          {{ n }}
-                        </button>
-                      }
-                    </div>
-                  }
+            <!-- My Sheets (grouped tickets) -->
+            @if (mySheets().length > 0) {
+              <div class="my-sheets">
+                <div class="sheets-header">
+                  <h3>Tờ Của Bạn</h3>
                 </div>
-                <div class="tickets-grid" [style.grid-template-columns]="'repeat(' + ticketColumns() + ', 1fr)'">
-                  @for (ticket of myTickets(); track ticket.id) {
-                    <app-ticket-display
-                      [ticket]="ticket"
+                <div class="sheets-grid">
+                  @for (sheet of mySheets(); track sheet.id) {
+                    <app-sheet-display
+                      [sheet]="sheet"
+                      [ownerName]="ownerDisplayName()"
                       [calledNumbers]="calledNumbers()"
                       [markedCells]="markedCells()"
                       [interactive]="gameStatus() === 'active'"
                       [winHighlightCells]="winHighlightCells()"
                       (cellClicked)="onCellClicked($event)">
-                    </app-ticket-display>
+                    </app-sheet-display>
                   }
                 </div>
               </div>
@@ -590,6 +581,20 @@ interface SheetInfo {
     .col-btn:hover { background: #3A3B3C; }
     .col-btn.active { background: #1877F2; border-color: #1877F2; color: white; }
     .tickets-grid { display: grid; gap: 12px; }
+
+    /* Sheets display */
+    .my-sheets { margin-bottom: 16px; }
+    .sheets-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .sheets-header h3 { margin: 0; font-size: 16px; color: #E4E6EB; }
+    .sheets-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    }
+    @media (max-width: 640px) {
+      .sheets-grid { grid-template-columns: 1fr; gap: 12px; }
+    }
+
     .penalty-notice {
       background: rgba(250,56,62,0.15); border: 1px solid #FA383E;
       border-radius: 8px; padding: 12px 16px; color: #FF6B6B; margin: 12px 0; font-size: 14px;
@@ -988,6 +993,31 @@ export class RoomComponent implements OnInit, OnDestroy {
     const userId = this.currentUserId();
     const player = this.players().find(p => p.userId === userId);
     return player?.isReady ?? false;
+  });
+
+  // Group my tickets into sheets for display
+  mySheets = computed(() => {
+    const tickets = this.myTickets();
+    const sheets = this.availableSheets();
+    const userId = this.currentUserId();
+    const takenMap = this.takenSheets();
+
+    // Find sheets that belong to current user
+    const mySheetsList: SheetInfo[] = [];
+    for (const sheet of sheets) {
+      if (takenMap.get(sheet.id) === userId) {
+        mySheetsList.push(sheet);
+      }
+    }
+    return mySheetsList;
+  });
+
+  // Get owner display name
+  ownerDisplayName = computed(() => {
+    const room = this.room();
+    if (!room) return 'Lô Tô';
+    const owner = this.players().find(p => p.userId === room.ownerId);
+    return owner?.displayName || 'Lô Tô';
   });
 
   constructor() {

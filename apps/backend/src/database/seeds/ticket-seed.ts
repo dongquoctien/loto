@@ -17,7 +17,7 @@ const dataSource = new DataSource({
   password: process.env.DB_PASSWORD || 'loto_password',
   database: process.env.DB_DATABASE || 'loto_db',
   entities: [TicketEntity, SheetEntity],
-  synchronize: true,
+  synchronize: false, // Disabled - we manage schema manually in seed
 });
 
 async function seed() {
@@ -27,17 +27,17 @@ async function seed() {
   const ticketRepo = dataSource.getRepository(TicketEntity);
   const sheetRepo = dataSource.getRepository(SheetEntity);
 
-  // Ensure enum columns include new color groups
-  await dataSource.query(`ALTER TABLE tickets MODIFY COLUMN color_group ENUM('orange','yellow','purple','pink','blue','green','lime','red','teal','brown') NOT NULL`);
-  await dataSource.query(`ALTER TABLE sheets MODIFY COLUMN color_group ENUM('orange','yellow','purple','pink','blue','green','lime','red','teal','brown') NOT NULL`);
-  console.log('Updated color_group enum columns');
-
-  // Clear existing data (disable FK checks for truncate)
+  // Clear existing data FIRST (before modifying enum - required if old colors exist)
   await dataSource.query('SET FOREIGN_KEY_CHECKS = 0');
   await sheetRepo.clear();
   await ticketRepo.clear();
   await dataSource.query('SET FOREIGN_KEY_CHECKS = 1');
   console.log('Cleared existing ticket and sheet data');
+
+  // Update enum columns (8 colors: orange, yellow, purple, pink, blue, green, lime, red)
+  await dataSource.query(`ALTER TABLE tickets MODIFY COLUMN color_group ENUM('orange','yellow','purple','pink','blue','green','lime','red') NOT NULL`);
+  await dataSource.query(`ALTER TABLE sheets MODIFY COLUMN color_group ENUM('orange','yellow','purple','pink','blue','green','lime','red') NOT NULL`);
+  console.log('Updated color_group enum columns');
 
   // Seed tickets
   const savedTickets: TicketEntity[] = [];

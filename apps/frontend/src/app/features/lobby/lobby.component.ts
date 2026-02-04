@@ -92,16 +92,10 @@ interface Room {
         <div class="create-section">
           <h3>Tạo Phòng Mới</h3>
           <form (ngSubmit)="createRoom()">
+            <!-- Always visible -->
             <div class="form-group">
               <label>Tên phòng</label>
               <input [(ngModel)]="roomName" name="roomName" required autocomplete="off" />
-            </div>
-            <div class="form-group">
-              <label>Mật khẩu phòng (tùy chọn)</label>
-              <input  [(ngModel)]="roomPassword" name="roomPassword" placeholder="Để trống nếu không cần" maxlength="50" autocomplete="new-password" />
-              @if (roomPassword && roomPassword.length > 0 && roomPassword.length < 4) {
-                <span class="field-hint error">Mật khẩu phải có ít nhất 4 ký tự</span>
-              }
             </div>
             <div class="form-row">
               <div class="form-group">
@@ -120,16 +114,14 @@ interface Room {
                 </select>
               </div>
             </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Giá/tờ (VNĐ)</label>
-                <input type="text"
-                  [ngModel]="priceDisplay"
-                  (ngModelChange)="onPriceInput($event)"
-                  (blur)="formatPrice()"
-                  name="price"
-                  inputmode="numeric" />
-              </div>
+            <div class="form-group">
+              <label>Giá/tờ (VNĐ)</label>
+              <input type="text"
+                [ngModel]="priceDisplay"
+                (ngModelChange)="onPriceInput($event)"
+                (blur)="formatPrice()"
+                name="price"
+                inputmode="numeric" />
             </div>
             @if (callMode === 'auto') {
               <div class="form-group">
@@ -146,32 +138,50 @@ interface Room {
                 </div>
               </div>
             }
-            <div class="form-group">
-              <label>Luật thắng (Kinh)</label>
-              <div class="win-rules">
-                <label class="checkbox-label">
-                  <input type="checkbox" [(ngModel)]="winHorizontal" name="winH" />
-                  ↔ Hàng ngang
-                </label>
-                <label class="checkbox-label">
-                  <input type="checkbox" [(ngModel)]="winVertical" name="winV" />
-                  ↕ Hàng dọc
-                </label>
-                <label class="checkbox-label">
-                  <input type="checkbox" [(ngModel)]="winDiagonal" name="winD" />
-                  ⤡ Đường chéo
-                </label>
+
+            <!-- Expandable section -->
+            <button type="button" class="expand-btn" (click)="showAdvanced = !showAdvanced">
+              {{ showAdvanced ? '▲ Ẩn tùy chọn' : '▼ Tùy chọn nâng cao' }}
+            </button>
+
+            @if (showAdvanced) {
+              <div class="advanced-options">
+                <div class="form-group">
+                  <label>Mật khẩu phòng (tùy chọn)</label>
+                  <input [(ngModel)]="roomPassword" name="roomPassword" placeholder="Để trống nếu không cần" maxlength="50" autocomplete="new-password" />
+                  @if (roomPassword && roomPassword.length > 0 && roomPassword.length < 4) {
+                    <span class="field-hint error">Mật khẩu phải có ít nhất 4 ký tự</span>
+                  }
+                </div>
+                <div class="form-group">
+                  <label>Luật thắng (Kinh)</label>
+                  <div class="win-rules">
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="winHorizontal" name="winH" />
+                      ↔ Hàng ngang
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="winVertical" name="winV" />
+                      ↕ Hàng dọc
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="winDiagonal" name="winD" />
+                      ⤡ Đường chéo
+                    </label>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>Chế độ chơi</label>
+                  <div class="win-rules">
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="allowHandsFree" name="allowHF" />
+                      Cho phép Rảnh Tay
+                    </label>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div class="form-group">
-              <label>Chế độ chơi</label>
-              <div class="win-rules">
-                <label class="checkbox-label">
-                  <input type="checkbox" [(ngModel)]="allowHandsFree" name="allowHF" />
-                  Cho phép Rảnh Tay
-                </label>
-              </div>
-            </div>
+            }
+
             <button type="submit" [disabled]="!roomName || (roomPassword && roomPassword.length > 0 && roomPassword.length < 4)">Tạo Phòng</button>
           </form>
         </div>
@@ -291,6 +301,17 @@ interface Room {
     }
     .interval-btn:hover { border-color: #1877F2; color: #1877F2; }
     .interval-btn.active { background: #1877F2; color: white; border-color: #1877F2; }
+    .expand-btn {
+      width: 100%; padding: 10px; margin: 12px 0;
+      background: transparent; border: 1px dashed #DDDFE2; border-radius: 6px;
+      color: #65676B; font-size: 14px; cursor: pointer; transition: all 0.2s;
+    }
+    .expand-btn:hover { background: #F0F2F5; border-color: #1877F2; color: #1877F2; }
+    .advanced-options {
+      padding: 16px; margin-bottom: 12px;
+      background: #F7F8FA; border-radius: 8px; border: 1px solid #E4E6EB;
+    }
+    .advanced-options .form-group:last-child { margin-bottom: 0; }
     @media (max-width: 768px) {
       .join-form { flex-direction: column; }
       .join-form button { width: 100%; }
@@ -317,7 +338,7 @@ export class LobbyComponent implements OnInit, OnDestroy {
   callVoice = 'default';
   voicePacks = VOICE_PACKS;
   autoCallInterval = 5;
-  intervalOptions = [2, 3, 5, 7];
+  intervalOptions = [3, 5, 7, 10];
   pricePerSheet = 5000;
   priceDisplay = '5,000';
   winHorizontal = true;
@@ -325,6 +346,7 @@ export class LobbyComponent implements OnInit, OnDestroy {
   winDiagonal = false;
   allowHandsFree = false;
   roomPassword = '';
+  showAdvanced = false;
   showProfile = false;
   showUserMenu = false;
   isNewUser = false;
