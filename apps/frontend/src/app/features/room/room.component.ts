@@ -481,12 +481,13 @@ interface SheetInfo {
   `,
   styles: [`
     .room-container {
-      height: 100vh;
+      min-height: 100vh;
+      min-height: 100dvh; /* iOS dynamic viewport height */
       background: #18191A;
       color: #E4E6EB;
       display: flex;
       flex-direction: column;
-      overflow-y: auto;
+      /* Removed overflow-y: auto - iOS Safari needs native scroll for sticky to work */
     }
     /* Password Dialog */
     .password-dialog-backdrop {
@@ -530,7 +531,11 @@ interface SheetInfo {
     .loading p { color: #B0B3B8; }
 
     .sticky-top {
-      position: sticky; top: 0; z-index: 100;
+      position: -webkit-sticky; /* Safari */
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #18191A; /* Ensure background for sticky overlay */
     }
     .room-header {
       background: #242526; padding: 12px 20px; display: flex;

@@ -21,9 +21,24 @@ export class AudioService {
   /** Track which voice packs are being preloaded */
   private preloading = new Set<string>();
 
+  constructor() {
+    // Resume AudioContext when user returns from sleep/background
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && this.audioContext?.state === 'suspended') {
+          this.audioContext.resume();
+        }
+      });
+    }
+  }
+
   private getContext(): AudioContext {
     if (!this.audioContext) {
       this.audioContext = new AudioContext();
+    }
+    // Resume AudioContext if suspended (happens after device sleep/background)
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume();
     }
     return this.audioContext;
   }
