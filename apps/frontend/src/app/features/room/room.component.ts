@@ -164,26 +164,6 @@ interface SheetInfo {
                 (sheetReturned)="returnSheet($event)">
               </app-sheet-selector>
 
-              <!-- Ready Button for non-owner players (desktop) -->
-              @if (!isOwner() && myTickets().length > 0) {
-                <div class="desktop-ready-section">
-                  <button
-                    class="desktop-ready-btn"
-                    [class.is-ready]="isCurrentUserReady()"
-                    (click)="toggleReady()">
-                    @if (isCurrentUserReady()) {
-                      <span class="ready-icon">✓</span>
-                      <span class="ready-text">ĐÃ SẴN SÀNG</span>
-                    } @else {
-                      <span class="ready-icon">⚡</span>
-                      <span class="ready-text">SẴN SÀNG</span>
-                    }
-                  </button>
-                  @if (!isCurrentUserReady()) {
-                    <p class="ready-hint">Nhấn để báo hiệu bạn đã sẵn sàng chơi</p>
-                  }
-                </div>
-              }
             }
 
             <!-- My Sheets (grouped tickets) -->
@@ -246,28 +226,6 @@ interface SheetInfo {
               }
             }
 
-            <!-- Owner Controls (desktop inline) -->
-            @if (isOwner()) {
-              <div class="inline-controls">
-                <app-game-controls
-                  [gameStatus]="gameStatus()"
-                  [callMode]="room()?.callMode ?? 'auto'"
-                  [autoCallEnabled]="autoCallEnabled()"
-                  [autoCallInterval]="room()?.autoCallInterval ?? 5"
-                  [kinhClaims]="verifyClaims()"
-                  (startGame)="startGame()"
-                  (callNumber)="callNumber()"
-                  (toggleAutoCall)="onToggleAutoCall($event)"
-                  (approveKinh)="approveKinh($event)"
-                  (rejectKinh)="rejectKinh($event)"
-                  (startChallenge)="startChallenge()"
-                  (resetGame)="resetGame()"
-                  (pauseGame)="pauseGame()"
-                  (resumeGame)="resumeGame()">
-                </app-game-controls>
-              </div>
-            }
-
             @if (gameStatus() === 'paused' && !isOwner()) {
               <div class="pause-notice">
                 ⏸ Game đang tạm dừng. Đợi chủ phòng tiếp tục...
@@ -307,17 +265,60 @@ interface SheetInfo {
             }
           </div>
 
-          <!-- Player List (desktop only) -->
-          <div class="desktop-player-list">
-            <app-player-list
-              [players]="players()"
-              [ownerId]="room()?.ownerId ?? null"
-              [currentUserId]="currentUserId()"
-              [penalizedPlayers]="penalizedPlayersSet()"
-              [nearWinPlayers]="nearWinPlayers()"
-              [kinhClaimantIds]="kinhClaimantUserIds()"
-              [roomStatus]="gameStatus() === 'preparing' ? 'waiting' : 'playing'">
-            </app-player-list>
+          <!-- Desktop Sidebar (Controls + Ready + Player List) -->
+          <div class="desktop-sidebar">
+            <!-- Owner Controls -->
+            @if (isOwner()) {
+              <div class="inline-controls">
+                <app-game-controls
+                  [gameStatus]="gameStatus()"
+                  [callMode]="room()?.callMode ?? 'auto'"
+                  [autoCallEnabled]="autoCallEnabled()"
+                  [autoCallInterval]="room()?.autoCallInterval ?? 5"
+                  [kinhClaims]="verifyClaims()"
+                  (startGame)="startGame()"
+                  (callNumber)="callNumber()"
+                  (toggleAutoCall)="onToggleAutoCall($event)"
+                  (approveKinh)="approveKinh($event)"
+                  (rejectKinh)="rejectKinh($event)"
+                  (startChallenge)="startChallenge()"
+                  (resetGame)="resetGame()"
+                  (pauseGame)="pauseGame()"
+                  (resumeGame)="resumeGame()">
+                </app-game-controls>
+              </div>
+            }
+
+            <!-- Ready Button for non-owner players (desktop sidebar) -->
+            @if (gameStatus() === 'preparing' && !isOwner() && myTickets().length > 0) {
+              <div class="sidebar-ready-section">
+                <button
+                  class="sidebar-ready-btn"
+                  [class.is-ready]="isCurrentUserReady()"
+                  (click)="toggleReady()">
+                  @if (isCurrentUserReady()) {
+                    <span class="ready-icon">✓</span>
+                    <span class="ready-text">ĐÃ SẴN SÀNG</span>
+                  } @else {
+                    <span class="ready-icon">⚡</span>
+                    <span class="ready-text">SẴN SÀNG</span>
+                  }
+                </button>
+              </div>
+            }
+
+            <!-- Player List -->
+            <div class="desktop-player-list">
+              <app-player-list
+                [players]="players()"
+                [ownerId]="room()?.ownerId ?? null"
+                [currentUserId]="currentUserId()"
+                [penalizedPlayers]="penalizedPlayersSet()"
+                [nearWinPlayers]="nearWinPlayers()"
+                [kinhClaimantIds]="kinhClaimantUserIds()"
+                [roomStatus]="gameStatus() === 'preparing' ? 'waiting' : 'playing'">
+              </app-player-list>
+            </div>
           </div>
         </div>
 
@@ -635,67 +636,61 @@ interface SheetInfo {
       text-align: center;
     }
 
-    /* Desktop Ready Button Section */
-    .desktop-ready-section {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin: 24px 0;
-      padding: 16px;
+    /* Sidebar Ready Button Section (desktop) */
+    .sidebar-ready-section {
+      display: none; /* Hidden by default, shown on desktop via media query */
+      background: #242526;
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     }
-    .desktop-ready-btn {
+    .sidebar-ready-btn {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 12px;
-      padding: 16px 40px;
-      border-radius: 12px;
+      gap: 8px;
+      width: 100%;
+      padding: 14px 16px;
+      border-radius: 10px;
       border: 2px solid #4A4B4C;
       background: linear-gradient(135deg, #3A3B3C 0%, #2D2E2F 100%);
       color: #B0B3B8;
-      font-size: 18px;
+      font-size: 14px;
       font-weight: 700;
-      letter-spacing: 3px;
+      letter-spacing: 2px;
       cursor: pointer;
       font-family: inherit;
       transition: all 0.3s ease;
     }
-    .desktop-ready-btn:hover {
+    .sidebar-ready-btn:hover {
       background: linear-gradient(135deg, #4A4B4C 0%, #3A3B3C 100%);
       border-color: #5A5B5C;
-      transform: scale(1.02);
     }
-    .desktop-ready-btn.is-ready {
+    .sidebar-ready-btn.is-ready {
       background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
       border-color: #FFE44D;
       color: #000000;
-      box-shadow: 0 0 25px rgba(255, 215, 0, 0.5), 0 0 50px rgba(255, 165, 0, 0.3), inset 0 0 20px rgba(255, 255, 255, 0.2);
-      animation: desktopReadyPulse 2s ease-in-out infinite;
+      box-shadow: 0 0 15px rgba(255, 215, 0, 0.5), 0 0 30px rgba(255, 165, 0, 0.3);
+      animation: sidebarReadyPulse 2s ease-in-out infinite;
     }
-    .desktop-ready-btn.is-ready:hover {
+    .sidebar-ready-btn.is-ready:hover {
       background: linear-gradient(135deg, #FFE14D 0%, #FFB732 100%);
-      transform: scale(1.02);
     }
-    .desktop-ready-btn .ready-icon {
-      font-size: 22px;
+    .sidebar-ready-btn .ready-icon {
+      font-size: 16px;
     }
-    .desktop-ready-btn .ready-text {
+    .sidebar-ready-btn .ready-text {
       text-shadow: 0 1px 2px rgba(0,0,0,0.3);
     }
-    .desktop-ready-btn.is-ready .ready-text {
+    .sidebar-ready-btn.is-ready .ready-text {
       text-shadow: 0 1px 2px rgba(0,0,0,0.2);
     }
-    .desktop-ready-section .ready-hint {
-      margin: 10px 0 0;
-      font-size: 13px;
-      color: #65676B;
-    }
-    @keyframes desktopReadyPulse {
+    @keyframes sidebarReadyPulse {
       0%, 100% {
-        box-shadow: 0 0 25px rgba(255, 215, 0, 0.5), 0 0 50px rgba(255, 165, 0, 0.3), inset 0 0 20px rgba(255, 255, 255, 0.2);
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.5), 0 0 30px rgba(255, 165, 0, 0.3);
       }
       50% {
-        box-shadow: 0 0 35px rgba(255, 215, 0, 0.7), 0 0 70px rgba(255, 165, 0, 0.4), inset 0 0 30px rgba(255, 255, 255, 0.25);
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.7), 0 0 40px rgba(255, 165, 0, 0.4);
       }
     }
 
@@ -863,10 +858,68 @@ interface SheetInfo {
       }
     }
 
-    /* Desktop: hide mobile elements */
-    .desktop-player-list { display: contents; }
+    /* Desktop: hide mobile elements, show sidebar */
+    .desktop-sidebar { display: none; }
+    .desktop-player-list { display: block; }
+    .inline-controls { margin-top: 0; margin-bottom: 12px; }
 
-    @media (max-width: 768px) {
+    /* Desktop (>= 768px): Floating sidebar layout */
+    @media (min-width: 768px) {
+      .room-body {
+        position: relative;
+        max-width: 1600px;
+        margin: 0 auto;
+        width: 100%;
+      }
+      .game-area {
+        max-width: 1024px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      .desktop-sidebar {
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        top: 140px;
+        right: calc((100vw - 1600px) / 2 + 24px);
+        width: 280px;
+        max-height: calc(100vh - 160px);
+        z-index: 50;
+        gap: 12px;
+      }
+      .inline-controls {
+        background: #242526;
+        border-radius: 12px;
+        padding: 16px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        flex-shrink: 0;
+      }
+      .desktop-player-list {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        background: #242526;
+        border-radius: 12px;
+        padding: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      }
+      .sidebar-ready-section {
+        display: block;
+      }
+    }
+    /* Adjust for smaller screens (768px - 1600px) */
+    @media (min-width: 768px) and (max-width: 1600px) {
+      .desktop-sidebar {
+        right: 24px;
+      }
+      .game-area {
+        max-width: calc(100% - 320px);
+        margin-left: 0;
+        margin-right: auto;
+      }
+    }
+
+    @media (max-width: 767px) {
       .near-win-toast-stack { top: 56px; }
       .room-header { padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
       .room-title { gap: 6px; min-width: 0; flex: 1; }
@@ -880,7 +933,7 @@ interface SheetInfo {
       .room-body { flex-direction: column; }
       .my-tickets { margin-bottom: 8px; }
       .tickets-header h3 { font-size: 14px; }
-      .desktop-player-list, .inline-kinh, .inline-controls, .desktop-ready-section { display: none; }
+      .desktop-player-list, .inline-kinh, .inline-controls, .sidebar-ready-section { display: none; }
       .mobile-bottom-bar { display: flex; }
       .sheet-backdrop { display: block; }
       .room-container { padding-bottom: 68px; }
@@ -1091,7 +1144,7 @@ export class RoomComponent implements OnInit, OnDestroy {
   private setupSocketListeners() {
     // Room joined
     this.socketService
-      .on<{ room: RoomData; players: Player[]; sheets: SheetInfo[]; session?: { id: number; status: string; calledNumbers: number[] }; purchasedSheets?: Record<string, number> }>('room:joined')
+      .on<{ room: RoomData; players: Player[]; sheets: SheetInfo[]; session?: { id: number; status: string; calledNumbers: number[] }; purchasedSheets?: Record<string, number>; markedCells?: string[] }>('room:joined')
       .pipe(takeUntil(this.destroy$))
       .subscribe((data) => {
         // Close password dialog on successful join
@@ -1140,6 +1193,14 @@ export class RoomComponent implements OnInit, OnDestroy {
           if (data.session.status === 'active' && data.room.callMode === 'auto') {
             this.autoCallEnabled.set(true);
           }
+        }
+
+        // Restore marked cells from server (for reconnection after sleep/refresh)
+        if (data.markedCells && data.markedCells.length > 0) {
+          this.markedCells.set(new Set(data.markedCells));
+          console.log(`Restored ${data.markedCells.length} marked cells from server`);
+        } else {
+          this.markedCells.set(new Set());
         }
 
         this.audioService.play('join');

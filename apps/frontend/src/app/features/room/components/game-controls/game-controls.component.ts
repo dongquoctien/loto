@@ -128,7 +128,7 @@ import { KinhVerifyClaimItem } from '@loto/shared';
     }
     .hint { color: #B0B3B8; font-size: 13px; margin: 0; }
     .btn {
-      padding: 12px 20px;
+      padding: 12px 15px;
       border: none;
       border-radius: 6px;
       cursor: pointer;

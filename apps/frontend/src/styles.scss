@@ -226,6 +226,65 @@ a:hover {
   background: rgba(24, 119, 242, 0.2);
 }
 
+/* ===== Custom Scrollbar ===== */
+/* For Webkit browsers (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* Hide scrollbar corner */
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* For Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+/* Light theme scrollbar (for light backgrounds like lobby) */
+.light-scrollbar::-webkit-scrollbar-thumb,
+body.light-theme ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.light-scrollbar::-webkit-scrollbar-thumb:hover,
+body.light-theme ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.light-scrollbar::-webkit-scrollbar-thumb:active,
+body.light-theme ::-webkit-scrollbar-thumb:active {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.light-scrollbar,
+body.light-theme * {
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+/* ===== End Custom Scrollbar ===== */
+
 .avatar {
   width: 32px;
   height: 32px;

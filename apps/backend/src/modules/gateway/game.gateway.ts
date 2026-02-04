@@ -162,6 +162,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Build session data for reconnection
       let sessionData: { id: number; status: string; calledNumbers: number[] } | undefined;
       let purchasedSheetsMap: Record<string, number> | undefined;
+      let userMarkedCells: string[] = [];
 
       // Find the active session for this room (in-memory, DB recovery, or auto-create)
       // Uses lock to prevent duplicate session creation when multiple users join concurrently
@@ -175,6 +176,11 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       purchasedSheetsMap = {};
       for (const [sheetId, userId] of state.state.purchasedSheets) {
         purchasedSheetsMap[String(sheetId)] = userId;
+      }
+
+      // Restore user's marked cells from database (for reconnection after sleep/refresh)
+      if (state.state.status === 'active' || state.state.status === 'paused_for_kinh') {
+        userMarkedCells = await this.gameService.getUserMarkedCells(state.sessionId, client.userId);
       }
 
       client.emit('room:joined', {
@@ -204,6 +210,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         sheets,
         session: sessionData,
         purchasedSheets: purchasedSheetsMap,
+        markedCells: userMarkedCells,
       });
 
       // If game is paused for kinh, send claims to reconnecting client

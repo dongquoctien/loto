@@ -90,10 +90,10 @@ interface Player {
   `,
   styles: [`
     .player-sidebar {
-      width: 200px;
+      // width: 200px;
       background: #242526;
       padding: 16px;
-      border-left: 1px solid #3A3B3C;
+      // border-left: 1px solid #3A3B3C;
       overflow-y: auto;
     }
     h3 {

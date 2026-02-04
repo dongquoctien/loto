@@ -758,6 +758,21 @@ export class GameService {
     return new Set(marks.map((m) => m.numberValue));
   }
 
+  /**
+   * Get all marked cells for a user in a session.
+   * Returns array of "ticketId:rowIndex:colIndex" strings for frontend compatibility.
+   */
+  async getUserMarkedCells(
+    sessionId: number,
+    userId: number,
+  ): Promise<string[]> {
+    const marks = await this.markedCellRepository.find({
+      where: { sessionId, userId },
+      select: ['ticketId', 'rowIndex', 'colIndex'],
+    });
+    return marks.map((m) => `${m.ticketId}:${m.rowIndex}:${m.colIndex}`);
+  }
+
   private generateShuffledNumbers(): number[] {
     const numbers: number[] = [];
     for (let i = 1; i <= 90; i++) {
