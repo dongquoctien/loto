@@ -1,5 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ElementRef, ViewChild, signal } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import { iconoirTrophy, iconoirCheck, iconoirCopy } from '@ng-icons/iconoir';
 
 export interface PaymentReportItem {
   userId: number;
@@ -25,7 +27,8 @@ interface ConfettiParticle {
 @Component({
   selector: 'app-winner-overlay',
   standalone: true,
-  imports: [CommonModule, DecimalPipe],
+  imports: [CommonModule, DecimalPipe, NgIcon],
+  viewProviders: [provideIcons({ iconoirTrophy, iconoirCheck, iconoirCopy })],
   template: `
     <div class="overlay" (click)="dismissed.emit()">
       <!-- Confetti canvas behind the card -->
@@ -42,7 +45,7 @@ interface ConfettiParticle {
         <div class="glow-ring glow-ring-1"></div>
         <div class="glow-ring glow-ring-2"></div>
 
-        <div class="trophy">🏆</div>
+        <div class="trophy"><ng-icon name="iconoirTrophy"></ng-icon></div>
         <h2>Chúc mừng người thắng!</h2>
 
         <div class="winner-avatar">
@@ -64,7 +67,11 @@ interface ConfettiParticle {
             <div class="report-header">
               <h4>Danh sách thanh toán</h4>
               <button class="copy-btn" (click)="copyReport($event)">
-                {{ copySuccess() ? '✓ Đã copy' : '📋 Copy' }}
+                @if (copySuccess()) {
+                  <ng-icon name="iconoirCheck" class="copy-icon"></ng-icon> Đã copy
+                } @else {
+                  <ng-icon name="iconoirCopy" class="copy-icon"></ng-icon> Copy
+                }
               </button>
             </div>
             <div class="report-list">
@@ -212,6 +219,7 @@ interface ConfettiParticle {
       position: relative;
       z-index: 2;
       line-height: 1.2;
+      color: #FFD700;
       animation: trophyBounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s both,
                  trophyGlow 2s ease-in-out infinite 1s;
       filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.5));
@@ -361,6 +369,7 @@ interface ConfettiParticle {
       transition: all 0.2s;
     }
     .copy-btn:hover { background: rgba(255, 215, 0, 0.2); }
+    .copy-icon { font-size: 12px;  }
     .report-list {
       max-height: 140px;
       overflow-y: auto;

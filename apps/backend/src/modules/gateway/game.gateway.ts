@@ -62,6 +62,16 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.emit('room:created', room);
   }
 
+  /** Get current online user count (excludes users in grace period) */
+  getOnlineCount(): number {
+    return this.userSockets.size;
+  }
+
+  /** Broadcast online count to all connected clients */
+  private broadcastOnlineCount() {
+    this.server.emit('users:online-count', { count: this.getOnlineCount() });
+  }
+
   async handleConnection(client: AuthenticatedSocket) {
     try {
       const token =
@@ -85,9 +95,15 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.logger.log(`User ${payload.sub} reconnected within grace period`);
       }
 
+      const isNewUser = !this.userSockets.has(payload.sub);
       this.userSockets.set(payload.sub, client.id);
 
       client.emit('authenticated', { userId: payload.sub });
+
+      // Broadcast updated online count if this is a new user (not reconnect)
+      if (isNewUser) {
+        this.broadcastOnlineCount();
+      }
     } catch {
       client.disconnect();
     }
@@ -107,6 +123,9 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const timer = setTimeout(() => {
       this.disconnectTimers.delete(userId);
       this.userSockets.delete(userId);
+
+      // Broadcast updated online count
+      this.broadcastOnlineCount();
 
       // Notify room about player going offline after grace period
       const roomId = this.userRooms.get(userId);
@@ -845,6 +864,11 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const message = error instanceof Error ? error.message : 'Failed to resume game';
       client.emit('error', { message });
     }
+  }
+
+  @SubscribeMessage('users:get-online-count')
+  handleGetOnlineCount(@ConnectedSocket() client: AuthenticatedSocket) {
+    client.emit('users:online-count', { count: this.getOnlineCount() });
   }
 
   @SubscribeMessage('game:reset')

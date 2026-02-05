@@ -4,6 +4,24 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { Subject, takeUntil } from 'rxjs';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import {
+  iconoirSoundHigh,
+  iconoirSoundOff,
+  iconoirLock,
+  iconoirAppleImac2021,
+  iconoirEditPencil,
+  iconoirGroup,
+  iconoirWarningTriangle,
+  iconoirDiceFive,
+  iconoirGoogleHome,
+  iconoirEye,
+  iconoirCheck,
+  iconoirSettings,
+  iconoirBell,
+  iconoirPause,
+  iconoirFlash,
+} from '@ng-icons/iconoir';
 import { SocketService } from '../../core/services/socket.service';
 import { AuthService } from '../../core/services/auth.service';
 import { AudioService } from '../../core/services/audio.service';
@@ -67,6 +85,7 @@ interface SheetInfo {
   imports: [
     CommonModule,
     FormsModule,
+    NgIcon,
     TicketDisplayComponent,
     SheetDisplayComponent,
     SheetSelectorComponent,
@@ -78,13 +97,32 @@ interface SheetInfo {
     KinhClaimOverlayComponent,
     ChallengeOverlayComponent,
   ],
+  viewProviders: [
+    provideIcons({
+      iconoirSoundHigh,
+      iconoirSoundOff,
+      iconoirLock,
+      iconoirAppleImac2021,
+      iconoirEditPencil,
+      iconoirGroup,
+      iconoirWarningTriangle,
+      iconoirDiceFive,
+      iconoirGoogleHome,
+      iconoirEye,
+      iconoirCheck,
+      iconoirSettings,
+      iconoirBell,
+      iconoirPause,
+      iconoirFlash,
+    }),
+  ],
   template: `
     <div class="room-container">
       <!-- Password Dialog -->
       @if (showPasswordDialog()) {
         <div class="password-dialog-backdrop">
           <div class="password-dialog">
-            <h3>🔒 Phòng Yêu Cầu Mật Khẩu</h3>
+            <h3><ng-icon name="iconoirLock" class="dialog-icon"></ng-icon> Phòng Yêu Cầu Mật Khẩu</h3>
             <p>Nhập mật khẩu để vào phòng</p>
             <input
               type="password"
@@ -128,11 +166,15 @@ interface SheetInfo {
             <div class="room-actions">
               @if (room()?.allowHandsFree && myTickets().length > 0 && gameStatus() !== 'preparing' && gameStatus() !== 'finished') {
                 <button class="hands-free-toggle" [class.active]="handsFreeMode()" (click)="toggleHandsFree()">
-                  {{ handsFreeMode() ? '🤖 Rảnh Tay' : '✋ Thủ Công' }}
+                  @if (handsFreeMode()) {
+                    <ng-icon name="iconoirAppleImac2021" class="toggle-icon"></ng-icon> Rảnh Tay
+                  } @else {
+                    <ng-icon name="iconoirEditPencil" class="toggle-icon"></ng-icon> Thủ Công
+                  }
                 </button>
               }
               <button class="sound-toggle" (click)="toggleSound()">
-                {{ soundEnabled() ? '🔊' : '🔇' }}
+                <ng-icon [name]="soundEnabled() ? 'iconoirSoundHigh' : 'iconoirSoundOff'"></ng-icon>
               </button>
               <button class="leave-btn" (click)="leaveRoom()" [disabled]="isGameInProgress()">Rời Phòng</button>
             </div>
@@ -205,7 +247,7 @@ interface SheetInfo {
 
             @if (isPenalized()) {
               <div class="penalty-notice">
-                ⚠️ Bạn đã bị phạt vì hô Kinh sai. Bạn sẽ phải trả tiền khi có người thắng.
+                <ng-icon name="iconoirWarningTriangle" class="penalty-icon"></ng-icon> Bạn đã bị phạt vì hô Kinh sai. Bạn sẽ phải trả tiền khi có người thắng.
               </div>
             }
 
@@ -228,7 +270,7 @@ interface SheetInfo {
 
             @if (gameStatus() === 'paused' && !isOwner()) {
               <div class="pause-notice">
-                ⏸ Game đang tạm dừng. Đợi chủ phòng tiếp tục...
+                <ng-icon name="iconoirPause" class="pause-icon"></ng-icon> Game đang tạm dừng. Đợi chủ phòng tiếp tục...
               </div>
             }
 
@@ -236,7 +278,7 @@ interface SheetInfo {
             @if (!isOwner()) {
               @if (!sessionId()) {
                 <div class="idle-state">
-                  <div class="idle-icon">🎲</div>
+                  <ng-icon name="iconoirDiceFive" class="idle-icon"></ng-icon>
                   <h3 class="idle-title">Sẵn Sàng Chơi</h3>
                   <p class="idle-text">Đợi chủ phòng bắt đầu ván mới...</p>
                   <div class="idle-hint">Khi ván bắt đầu, bạn sẽ chọn tờ vé và tham gia ngay!</div>
@@ -244,19 +286,19 @@ interface SheetInfo {
               } @else if (gameStatus() === 'finished') {
                 @if (myTickets().length === 0) {
                   <div class="idle-state">
-                    <div class="idle-icon">🏁</div>
+                    <ng-icon name="iconoirGoogleHome" class="idle-icon"></ng-icon>
                     <h3 class="idle-title">Ván Đã Kết Thúc</h3>
                     <p class="idle-text">Đợi chủ phòng bắt đầu ván mới...</p>
                     <div class="idle-hint">Vui lòng chờ trong giây lát, ván mới sẽ bắt đầu sớm thôi!</div>
                   </div>
                 } @else {
                   <div class="finished-banner">
-                    🏁 Ván đã kết thúc — Đợi chủ phòng bắt đầu ván mới...
+                    <ng-icon name="iconoirGoogleHome" class="finished-icon"></ng-icon> Ván đã kết thúc — Đợi chủ phòng bắt đầu ván mới...
                   </div>
                 }
               } @else if (gameStatus() !== 'preparing' && myTickets().length === 0) {
                 <div class="idle-state">
-                  <div class="idle-icon">👀</div>
+                  <ng-icon name="iconoirEye" class="idle-icon"></ng-icon>
                   <h3 class="idle-title">Đang Theo Dõi</h3>
                   <p class="idle-text">Ván đang diễn ra, bạn chưa có vé.</p>
                   <div class="idle-hint">Hãy đợi ván tiếp theo để mua vé và tham gia nhé!</div>
@@ -297,10 +339,10 @@ interface SheetInfo {
                   [class.is-ready]="isCurrentUserReady()"
                   (click)="toggleReady()">
                   @if (isCurrentUserReady()) {
-                    <span class="ready-icon">✓</span>
+                    <ng-icon name="iconoirCheck" class="ready-icon"></ng-icon>
                     <span class="ready-text">ĐÃ SẴN SÀNG</span>
                   } @else {
-                    <span class="ready-icon">⚡</span>
+                    <ng-icon name="iconoirFlash" class="ready-icon"></ng-icon>
                     <span class="ready-text">SẴN SÀNG</span>
                   }
                 </button>
@@ -325,7 +367,7 @@ interface SheetInfo {
         <!-- Mobile Bottom Bar -->
         <div class="mobile-bottom-bar">
           <button class="bar-btn" (click)="openSheet('players')">
-            <span class="bar-icon">👥</span>
+            <ng-icon name="iconoirGroup" class="bar-icon"></ng-icon>
             <span class="bar-label">{{ players().length }}</span>
           </button>
           @if (gameStatus() === 'preparing' && !isOwner() && myTickets().length > 0) {
@@ -334,10 +376,10 @@ interface SheetInfo {
               [class.is-ready]="isCurrentUserReady()"
               (click)="toggleReady()">
               @if (isCurrentUserReady()) {
-                <span class="bar-ready-icon">✓</span>
+                <ng-icon name="iconoirCheck" class="bar-ready-icon"></ng-icon>
                 <span class="bar-ready-text">ĐÃ SẴN SÀNG</span>
               } @else {
-                <span class="bar-ready-icon">⚡</span>
+                <ng-icon name="iconoirFlash" class="bar-ready-icon"></ng-icon>
                 <span class="bar-ready-text">SẴN SÀNG</span>
               }
             </button>
@@ -357,7 +399,7 @@ interface SheetInfo {
           }
           @if (isOwner()) {
             <button class="bar-btn" (click)="openSheet('controls')">
-              <span class="bar-icon">⚙️</span>
+              <ng-icon name="iconoirSettings" class="bar-icon"></ng-icon>
               <span class="bar-label">Quản lý</span>
             </button>
           }
@@ -453,7 +495,7 @@ interface SheetInfo {
       @if (showKinhAlert()) {
         <div class="kinh-alert-backdrop" (click)="dismissKinhAlert()">
           <div class="kinh-alert-popup" (click)="$event.stopPropagation()">
-            <div class="kinh-alert-icon">🔔</div>
+            <ng-icon name="iconoirBell" class="kinh-alert-icon"></ng-icon>
             <h3 class="kinh-alert-title">Có người Hô KINH!</h3>
             <div class="kinh-alert-names">
               @for (name of kinhAlertClaimants(); track name) {
@@ -499,7 +541,8 @@ interface SheetInfo {
       max-width: 360px; width: 90%; text-align: center;
       box-shadow: 0 8px 40px rgba(0,0,0,0.4);
     }
-    .password-dialog h3 { margin: 0 0 8px; font-size: 20px; color: #E4E6EB; }
+    .password-dialog h3 { margin: 0 0 8px; font-size: 20px; color: #E4E6EB; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .dialog-icon { font-size: 34px; }
     .password-dialog p { margin: 0 0 16px; color: #B0B3B8; font-size: 14px; }
     .password-dialog input {
       width: 100%; padding: 12px; border: 1px solid #3A3B3C;
@@ -567,6 +610,7 @@ interface SheetInfo {
       color: #B0B3B8; font-family: inherit;
     }
     .hands-free-toggle.active { background: rgba(0,164,0,0.2); border-color: #00A400; color: #00A400; }
+    .toggle-icon { font-size: 14px;  }
     .sound-toggle { background: none; border: 1px solid #3A3B3C; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 18px; }
     .leave-btn {
       background: #FA383E; border: none; color: white; padding: 6px 14px;
@@ -716,7 +760,7 @@ interface SheetInfo {
       0% { transform: scale(0.8); opacity: 0; }
       100% { transform: scale(1); opacity: 1; }
     }
-    .kinh-alert-icon { font-size: 48px; margin-bottom: 8px; animation: kinhBell 0.5s ease-in-out 0.2s; }
+    .kinh-alert-icon { font-size: 48px; margin-bottom: 8px; color: #FFD700; animation: kinhBell 0.5s ease-in-out 0.2s; }
     @keyframes kinhBell {
       0%, 100% { transform: rotate(0); }
       20% { transform: rotate(15deg); }
@@ -991,6 +1035,7 @@ export class RoomComponent implements OnInit, OnDestroy {
   winHighlightCells = signal<Set<string>>(new Set());
   soundEnabled = signal(true);
   handsFreeMode = signal(false);
+  private readonly HANDS_FREE_KEY = 'loto_hands_free_mode';
 
   // Near-win (đang đợi) state: userId -> nearWinCount
   nearWinPlayers = signal<Map<number, number>>(new Map());
@@ -1161,6 +1206,14 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.room.set(data.room);
         this.players.set(data.players);
         this.availableSheets.set(data.sheets);
+
+        // Restore hands-free mode preference if room allows it
+        if (data.room.allowHandsFree) {
+          this.handsFreeMode.set(this.getHandsFreePreference());
+        } else {
+          // Room doesn't allow hands-free, force manual mode
+          this.handsFreeMode.set(false);
+        }
 
         // Preload voice pack audio files
         if (data.room.callVoice && data.room.callVoice !== 'default') {
@@ -1376,6 +1429,13 @@ export class RoomComponent implements OnInit, OnDestroy {
       .subscribe((data) => {
         this.kinhClaims.set(data.claims);
         this.kinhClaimantUserIds.set(data.claims.map(c => c.userId));
+
+        // Ensure gameStatus is paused_for_kinh when we receive claims
+        // (fixes race condition when owner claims KINH themselves - events may arrive out of order)
+        if (data.claims.length > 0 && this.gameStatus() !== 'paused_for_kinh') {
+          this.gameStatus.set('paused_for_kinh');
+        }
+
         this.audioService.play('kinh');
       });
 
@@ -1385,6 +1445,13 @@ export class RoomComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe((data) => {
         this.verifyClaims.set(data.claims);
+
+        // Ensure gameStatus is paused_for_kinh when we receive verify request
+        // (fixes race condition when owner claims KINH themselves - events may arrive out of order)
+        if (data.claims.length > 0 && this.gameStatus() !== 'paused_for_kinh') {
+          this.gameStatus.set('paused_for_kinh');
+        }
+
         // Show alert popup for owner
         if (this.isOwner() && data.claims.length > 0) {
           this.kinhAlertClaimants.set(data.claims.map(c => c.displayName));
@@ -1756,6 +1823,14 @@ export class RoomComponent implements OnInit, OnDestroy {
 
   toggleHandsFree() {
     this.handsFreeMode.update((v) => !v);
+    // Save preference to localStorage
+    localStorage.setItem(this.HANDS_FREE_KEY, String(this.handsFreeMode()));
+  }
+
+  private getHandsFreePreference(): boolean {
+    const saved = localStorage.getItem(this.HANDS_FREE_KEY);
+    // Default to false (manual mode) if no preference saved
+    return saved === 'true';
   }
 
   toggleReady() {

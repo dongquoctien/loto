@@ -1,5 +1,12 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import {
+  iconoirNavArrowUp,
+  iconoirNavArrowDown,
+  iconoirCart,
+  iconoirUndo,
+} from '@ng-icons/iconoir';
 
 
 interface SheetInfo {
@@ -30,7 +37,15 @@ const COLOR_HEX: Record<string, { bg: string; border: string; text: string; name
 @Component({
   selector: 'app-sheet-selector',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, NgIcon],
+  viewProviders: [
+    provideIcons({
+      iconoirNavArrowUp,
+      iconoirNavArrowDown,
+      iconoirCart,
+      iconoirUndo,
+    }),
+  ],
   template: `
     <div class="sheet-selector">
       <h3>Chọn Tờ Vé</h3>
@@ -66,7 +81,13 @@ const COLOR_HEX: Record<string, { bg: string; border: string; text: string; name
                   <span class="buyer-name">{{ buyer?.displayName || 'Đã mua' }}</span>
                 </div>
               } @else {
-                <span class="sheet-status">{{ expanded ? '▲ Thu gọn' : '▼ Xem vé' }}</span>
+                <span class="sheet-status">
+                  @if (expanded) {
+                    <ng-icon name="iconoirNavArrowUp" class="status-icon"></ng-icon> Thu gọn
+                  } @else {
+                    <ng-icon name="iconoirNavArrowDown" class="status-icon"></ng-icon> Xem vé
+                  }
+                </span>
               }
             </button>
 
@@ -93,13 +114,13 @@ const COLOR_HEX: Record<string, { bg: string; border: string; text: string; name
                   <button class="btn-buy"
                           [style.background-color]="color.bg"
                           (click)="onSelect(sheet); $event.stopPropagation()">
-                    🛒 Mua Tờ {{ sheet.sheetNumber }}
+                    <ng-icon name="iconoirCart" class="btn-icon"></ng-icon> Mua Tờ {{ sheet.sheetNumber }}
                   </button>
                 }
                 @if (mine && canPurchase) {
                   <button class="btn-return"
                           (click)="onReturn(sheet); $event.stopPropagation()">
-                    ↩ Hoàn Tờ {{ sheet.sheetNumber }}
+                    <ng-icon name="iconoirUndo" class="btn-icon"></ng-icon> Hoàn Tờ {{ sheet.sheetNumber }}
                   </button>
                 }
               </div>
@@ -170,7 +191,12 @@ const COLOR_HEX: Record<string, { bg: string; border: string; text: string; name
       font-size: 10px;
       margin-top: 2px;
       font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 3px;
     }
+    .status-icon { font-size: 10px; }
+    .btn-icon { font-size: 14px;  }
 
     /* Ticket Preview */
     .ticket-preview {

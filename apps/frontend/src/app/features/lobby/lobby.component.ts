@@ -4,6 +4,22 @@ import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { Subject, takeUntil } from 'rxjs';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import {
+  iconoirSoundHigh,
+  iconoirSoundOff,
+  iconoirLock,
+  iconoirMicrophone,
+  iconoirTrophy,
+  iconoirTimer,
+  iconoirHandCard,
+  iconoirArrowSeparate,
+  iconoirArrowSeparateVertical,
+  iconoirNavArrowDown,
+  iconoirNavArrowUp,
+  iconoirOpenNewWindow,
+  iconoirFlashOff,
+} from '@ng-icons/iconoir';
 import { AuthService } from '../../core/services/auth.service';
 import { SocketService } from '../../core/services/socket.service';
 import { VOICE_PACKS } from '../../core/services/audio.service';
@@ -32,7 +48,24 @@ interface Room {
 @Component({
   selector: 'app-lobby',
   standalone: true,
-  imports: [CommonModule, FormsModule, ProfileComponent],
+  imports: [CommonModule, FormsModule, ProfileComponent, NgIcon],
+  viewProviders: [
+    provideIcons({
+      iconoirSoundHigh,
+      iconoirSoundOff,
+      iconoirLock,
+      iconoirMicrophone,
+      iconoirTrophy,
+      iconoirTimer,
+      iconoirHandCard,
+      iconoirArrowSeparate,
+      iconoirArrowSeparateVertical,
+      iconoirNavArrowDown,
+      iconoirNavArrowUp,
+      iconoirOpenNewWindow,
+      iconoirFlashOff,
+    }),
+  ],
   template: `
     <div class="lobby-container">
       <header class="lobby-header">
@@ -63,7 +96,7 @@ interface Room {
                 <span class="status-dot"></span>
               </span>
               <span class="mobile-display-name">{{ user()?.displayName }}</span>
-              <span class="dropdown-arrow">▾</span>
+              <ng-icon name="iconoirNavArrowDown" class="dropdown-arrow"></ng-icon>
             </button>
             @if (showUserMenu) {
               <div class="dropdown-backdrop" (click)="showUserMenu = false"></div>
@@ -141,7 +174,11 @@ interface Room {
 
             <!-- Expandable section -->
             <button type="button" class="expand-btn" (click)="showAdvanced = !showAdvanced">
-              {{ showAdvanced ? '▲ Ẩn tùy chọn' : '▼ Tùy chọn nâng cao' }}
+              @if (showAdvanced) {
+                <ng-icon name="iconoirNavArrowUp" class="expand-icon"></ng-icon> Ẩn tùy chọn
+              } @else {
+                <ng-icon name="iconoirNavArrowDown" class="expand-icon"></ng-icon> Tùy chọn nâng cao
+              }
             </button>
 
             @if (showAdvanced) {
@@ -158,15 +195,15 @@ interface Room {
                   <div class="win-rules">
                     <label class="checkbox-label">
                       <input type="checkbox" [(ngModel)]="winHorizontal" name="winH" />
-                      ↔ Hàng ngang
+                      <ng-icon name="iconoirArrowSeparate" class="rule-icon"></ng-icon> Hàng ngang
                     </label>
                     <label class="checkbox-label">
                       <input type="checkbox" [(ngModel)]="winVertical" name="winV" />
-                      ↕ Hàng dọc
+                      <ng-icon name="iconoirArrowSeparateVertical" class="rule-icon"></ng-icon> Hàng dọc
                     </label>
                     <label class="checkbox-label">
                       <input type="checkbox" [(ngModel)]="winDiagonal" name="winD" />
-                      ⤡ Đường chéo
+                      <ng-icon name="iconoirOpenNewWindow" class="rule-icon"></ng-icon> Đường chéo
                     </label>
                   </div>
                 </div>
@@ -193,7 +230,7 @@ interface Room {
               <div class="room-card-top">
                 <div class="room-name">{{ room.name }}</div>
                 @if (room.password) {
-                  <span class="lock-badge" title="Phòng có mật khẩu">🔒</span>
+                  <ng-icon name="iconoirLock" class="lock-badge" title="Phòng có mật khẩu"></ng-icon>
                 }
                 <span class="room-code-badge">{{ room.roomCode }}</span>
               </div>
@@ -203,11 +240,17 @@ interface Room {
                 <span>{{ room.players?.length || 0 }} người</span>
               </div>
               <div class="room-tags">
-                <span class="tag">{{ room.callMode === 'auto' ? '⏱ Tự động ' + room.autoCallInterval + 's' : '✋ Thủ công' }}</span>
-                <span class="tag">🎙 {{ getVoiceLabel(room.callVoice) }}</span>
-                <span class="tag">🏆 {{ getWinRules(room) }}</span>
+                <span class="tag">
+                  @if (room.callMode === 'auto') {
+                    <ng-icon name="iconoirTimer" class="tag-icon"></ng-icon> Tự động {{ room.autoCallInterval }}s
+                  } @else {
+                    <ng-icon name="iconoirHandCard" class="tag-icon"></ng-icon> Thủ công
+                  }
+                </span>
+                <span class="tag"><ng-icon name="iconoirMicrophone" class="tag-icon"></ng-icon> {{ getVoiceLabel(room.callVoice) }}</span>
+                <span class="tag"><ng-icon name="iconoirTrophy" class="tag-icon"></ng-icon> {{ getWinRules(room) }}</span>
                 @if (room.allowHandsFree) {
-                  <span class="tag tag-hf">🤖 Rảnh tay</span>
+                  <span class="tag tag-hf"><ng-icon name="iconoirFlashOff" class="tag-icon"></ng-icon> Rảnh tay</span>
                 }
               </div>
             </div>
@@ -215,11 +258,22 @@ interface Room {
             <p class="no-rooms">Chưa có phòng nào. Hãy tạo phòng mới!</p>
           }
         </div>
+
+        <div class="online-indicator">
+          <span class="online-dot"></span>
+          <span class="online-count">{{ onlineCount() }} online</span>
+        </div>
       </div>
 
       @if (showProfile) {
         <app-profile [isNewUser]="isNewUser" (closed)="onProfileClosed()"></app-profile>
       }
+
+
+
+      <button class="music-toggle" (click)="toggleBackgroundMusic()" [title]="bgMusicPlaying() ? 'Tắt nhạc' : 'Bật nhạc'">
+        <ng-icon [name]="bgMusicPlaying() ? 'iconoirSoundHigh' : 'iconoirSoundOff'"></ng-icon>
+      </button>
     </div>
   `,
   styles: [`
@@ -232,6 +286,30 @@ interface Room {
     }
     .lobby-header h1 { margin: 0; font-size: 24px; }
     .user-info { display: flex; gap: 12px; align-items: center; }
+    .online-indicator {
+      display: flex; align-items: center; justify-content: center;
+      gap: 6px; padding-bottom: 12px; position: absolute; left: 24px;
+    }
+    .online-dot {
+      width: 8px; height: 8px; background: #31A24C; border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.9); }
+    }
+    .online-count { font-size: 13px; font-weight: 500; color: #65676B; }
+    .music-toggle {
+      position: fixed; bottom: 20px; right: 20px; z-index: 50;
+      width: 44px; height: 44px; border-radius: 50%;
+      background: white; border: 1px solid #DDDFE2;
+      color: #1877F2;
+      font-size: 20px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      transition: all 0.2s;
+    }
+    .music-toggle:hover { background: #F0F2F5; transform: scale(1.1); }
     .username-link { color: white; text-decoration: none; font-weight: 600; cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: background 0.2s; display: flex; align-items: center; gap: 8px; }
     .username-link:hover { background: rgba(255,255,255,0.2); }
     .avatar-wrapper { position: relative; display: inline-block; flex-shrink: 0; }
@@ -246,7 +324,7 @@ interface Room {
     .mobile-user-btn { background: none; border: none; padding: 4px 8px; cursor: pointer; border-radius: 6px; transition: background 0.2s; display: flex; align-items: center; gap: 8px; color: white; }
     .mobile-user-btn:hover { background: rgba(255,255,255,0.2); }
     .mobile-display-name { font-size: 14px; font-weight: 600; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .dropdown-arrow { font-size: 12px; opacity: 0.8; }
+    .dropdown-arrow { font-size: 12px; opacity: 0.8; display: flex; }
     .dropdown-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 99; }
     .dropdown-menu {
       position: absolute; top: calc(100% + 8px); right: 0; z-index: 100;
@@ -258,7 +336,7 @@ interface Room {
       text-align: left; cursor: pointer; font-size: 14px; color: #1C1E21; transition: background 0.15s;
     }
     .dropdown-menu button:hover { background: #F0F2F5; }
-    .lobby-content { max-width: 800px; margin: 0 auto; padding: 24px; }
+    .lobby-content { max-width: 800px; margin: 0 auto; padding: 24px; position: relative; }
     .join-section, .create-section, .rooms-section {
       background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px;
       box-shadow: 0 1px 2px rgba(0,0,0,0.1);
@@ -284,14 +362,14 @@ interface Room {
     .room-card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
     .room-name { font-weight: 600; font-size: 16px; color: #1C1E21; }
     .room-code-badge { background: #1877F2; color: white; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 4px; letter-spacing: 0.5px; }
-    .lock-badge { font-size: 14px; }
+    .lock-badge { font-size: 14px; color: #65676B; }
     .room-meta { display: flex; gap: 12px; color: #65676B; font-size: 13px; flex-wrap: wrap; margin-bottom: 8px; }
     .room-tags { display: flex; gap: 6px; flex-wrap: wrap; }
     .tag { background: #F0F2F5; color: #4B4F56; font-size: 12px; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
     .tag-hf { background: #E8F5E9; color: #2E7D32; }
     .no-rooms { color: #65676B; text-align: center; }
     .win-rules { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 4px; }
-    .checkbox-label { display: flex; align-items: center; gap: 6px; color: #606770; font-size: 14px; cursor: pointer; }
+    .checkbox-label { display: flex !important; align-items: center; gap: 6px; color: #606770; font-size: 14px; cursor: pointer; }
     .checkbox-label input[type="checkbox"] { width: 18px; height: 18px; }
     .interval-options { display: flex; gap: 8px; margin-top: 4px; }
     .interval-btn {
@@ -312,6 +390,10 @@ interface Room {
       background: #F7F8FA; border-radius: 8px; border: 1px solid #E4E6EB;
     }
     .advanced-options .form-group:last-child { margin-bottom: 0; }
+    .tag-icon { font-size: 12px;  margin-right: 2px; }
+    .rule-icon { font-size: 14px;  }
+    .expand-icon { font-size: 12px;  margin-right: 4px; }
+    .tag { display: inline-flex; align-items: center; gap: 3px; }
     @media (max-width: 768px) {
       .join-form { flex-direction: column; }
       .join-form button { width: 100%; }
@@ -319,6 +401,9 @@ interface Room {
       .mobile-menu { display: block; }
       .lobby-header h1 { font-size: 18px; }
       .lobby-content { padding: 16px; }
+      .online-count { font-size: 12px; }
+      .music-toggle { bottom: 16px; right: 16px; width: 40px; height: 40px; }
+      .online-indicator { left: 16px; }
     }
   `],
 })
@@ -332,6 +417,7 @@ export class LobbyComponent implements OnInit, OnDestroy {
 
   user = this.authService.user;
   rooms = signal<Room[]>([]);
+  onlineCount = signal<number>(0);
   joinCode = '';
   roomName = '';
   callMode = 'auto';
@@ -351,6 +437,15 @@ export class LobbyComponent implements OnInit, OnDestroy {
   showUserMenu = false;
   isNewUser = false;
 
+  // Background music (memory only, default off)
+  private bgMusic: HTMLAudioElement | null = null;
+  private bgMusicTracks = [
+    '/audio/background/bg-ms-1.mp3',
+    '/audio/background/bg-ms-2.mp3',
+    '/audio/background/bg-ms-3.mp3',
+  ];
+  bgMusicPlaying = signal(false);
+
   ngOnInit() {
     this.loadRooms();
     this.setupSocketListeners();
@@ -365,10 +460,51 @@ export class LobbyComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+    this.stopBackgroundMusic();
+  }
+
+  toggleBackgroundMusic() {
+    if (this.bgMusicPlaying()) {
+      // Turn off music
+      if (this.bgMusic) {
+        this.bgMusic.pause();
+      }
+      this.bgMusicPlaying.set(false);
+    } else {
+      // Turn on music
+      if (!this.bgMusic) {
+        const randomIndex = Math.floor(Math.random() * this.bgMusicTracks.length);
+        this.bgMusic = new Audio(this.bgMusicTracks[randomIndex]);
+        this.bgMusic.loop = true;
+        this.bgMusic.volume = 0.3;
+      }
+      this.bgMusic.play().then(() => {
+        this.bgMusicPlaying.set(true);
+      });
+    }
+  }
+
+  private stopBackgroundMusic() {
+    if (this.bgMusic) {
+      this.bgMusic.pause();
+      this.bgMusic.src = '';
+      this.bgMusic = null;
+    }
   }
 
   private setupSocketListeners() {
     this.socketService.connect();
+
+    // Listen for online count updates
+    this.socketService
+      .on<{ count: number }>('users:online-count')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(({ count }) => {
+        this.onlineCount.set(count);
+      });
+
+    // Request current online count
+    this.socketService.emit('users:get-online-count', {});
 
     // Listen for room creation
     this.socketService
