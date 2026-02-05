@@ -138,3 +138,61 @@ cd apps/frontend && npm test
 ```bash
 cd apps/backend && npm run lint
 ```
+
+---
+
+## 🇻🇳 Chính sách sử dụng (Vietnamese)
+
+### Mục đích
+
+Dự án này được phát triển chỉ nhằm mục đích giải trí và học tập.
+
+### Không kinh doanh – Không tiền bạc
+
+- Không có bất kỳ hình thức kinh doanh, thu phí, cá cược hay giao dịch tiền bạc nào.
+- Dự án không tạo ra lợi nhuận trực tiếp hoặc gián tiếp.
+
+### Tuân thủ pháp luật
+
+- Dự án không khuyến khích, không hỗ trợ và không liên quan đến các hoạt động vi phạm pháp luật.
+- Người dùng chịu trách nhiệm cho việc sử dụng phần mềm theo quy định pháp luật tại quốc gia của mình.
+
+### Trách nhiệm
+
+- Tác giả không chịu trách nhiệm cho việc sử dụng sai mục đích hoặc trái pháp luật từ phía người dùng.
+- Mọi nội dung trong dự án được cung cấp "as-is" (nguyên trạng).
+
+### Liên hệ
+
+Nếu có bất kỳ vấn đề nào liên quan đến bản quyền, pháp lý hoặc nội dung, vui lòng liên hệ trực tiếp với tác giả để được xử lý kịp thời:
+
+📧 **itdongquoctien@gmail.com**
+
+---
+
+## 🇬🇧 Usage Policy (English)
+
+### Purpose
+
+This project is developed for **entertainment and educational purposes only**.
+
+### No Commercial Use – No Money Involved
+
+- There is no commercial activity, no fees, no gambling, and no monetary transactions involved.
+- The project does not generate any direct or indirect profit.
+
+### Legal Compliance
+
+- The project does not promote, support, or engage in any illegal activities.
+- Users are responsible for ensuring their use of the software complies with local laws and regulations.
+
+### Disclaimer
+
+- The author is not responsible for any misuse or illegal use of the project by users.
+- All content is provided "as is", without warranties of any kind.
+
+### Contact
+
+If you believe there is any legal, copyright, or content-related issue, please contact the author directly for prompt resolution:
+
+📧 **itdongquoctien@gmail.com**
