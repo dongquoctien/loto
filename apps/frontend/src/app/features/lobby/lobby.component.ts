@@ -6,8 +6,6 @@ import { HttpClient } from '@angular/common/http';
 import { Subject, takeUntil } from 'rxjs';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
-  iconoirSoundHigh,
-  iconoirSoundOff,
   iconoirLock,
   iconoirMicrophone,
   iconoirTrophy,
@@ -51,8 +49,6 @@ interface Room {
   imports: [CommonModule, FormsModule, ProfileComponent, NgIcon],
   viewProviders: [
     provideIcons({
-      iconoirSoundHigh,
-      iconoirSoundOff,
       iconoirLock,
       iconoirMicrophone,
       iconoirTrophy,
@@ -271,9 +267,6 @@ interface Room {
 
 
 
-      <button class="music-toggle" (click)="toggleBackgroundMusic()" [title]="bgMusicPlaying() ? 'Tắt nhạc' : 'Bật nhạc'">
-        <ng-icon [name]="bgMusicPlaying() ? 'iconoirSoundHigh' : 'iconoirSoundOff'"></ng-icon>
-      </button>
     </div>
   `,
   styles: [`
@@ -299,17 +292,6 @@ interface Room {
       50% { opacity: 0.6; transform: scale(0.9); }
     }
     .online-count { font-size: 13px; font-weight: 500; color: #65676B; }
-    .music-toggle {
-      position: fixed; bottom: 20px; right: 20px; z-index: 50;
-      width: 44px; height: 44px; border-radius: 50%;
-      background: white; border: 1px solid #DDDFE2;
-      color: #1877F2;
-      font-size: 20px; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-      transition: all 0.2s;
-    }
-    .music-toggle:hover { background: #F0F2F5; transform: scale(1.1); }
     .username-link { color: white; text-decoration: none; font-weight: 600; cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: background 0.2s; display: flex; align-items: center; gap: 8px; }
     .username-link:hover { background: rgba(255,255,255,0.2); }
     .avatar-wrapper { position: relative; display: inline-block; flex-shrink: 0; }
@@ -437,15 +419,6 @@ export class LobbyComponent implements OnInit, OnDestroy {
   showUserMenu = false;
   isNewUser = false;
 
-  // Background music (memory only, default off)
-  private bgMusic: HTMLAudioElement | null = null;
-  private bgMusicTracks = [
-    '/audio/background/bg-ms-1.mp3',
-    '/audio/background/bg-ms-2.mp3',
-    '/audio/background/bg-ms-3.mp3',
-  ];
-  bgMusicPlaying = signal(false);
-
   ngOnInit() {
     this.loadRooms();
     this.setupSocketListeners();
@@ -460,36 +433,6 @@ export class LobbyComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
-    this.stopBackgroundMusic();
-  }
-
-  toggleBackgroundMusic() {
-    if (this.bgMusicPlaying()) {
-      // Turn off music
-      if (this.bgMusic) {
-        this.bgMusic.pause();
-      }
-      this.bgMusicPlaying.set(false);
-    } else {
-      // Turn on music
-      if (!this.bgMusic) {
-        const randomIndex = Math.floor(Math.random() * this.bgMusicTracks.length);
-        this.bgMusic = new Audio(this.bgMusicTracks[randomIndex]);
-        this.bgMusic.loop = true;
-        this.bgMusic.volume = 0.3;
-      }
-      this.bgMusic.play().then(() => {
-        this.bgMusicPlaying.set(true);
-      });
-    }
-  }
-
-  private stopBackgroundMusic() {
-    if (this.bgMusic) {
-      this.bgMusic.pause();
-      this.bgMusic.src = '';
-      this.bgMusic = null;
-    }
   }
 
   private setupSocketListeners() {
