@@ -216,6 +216,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
           winVertical: room.winVertical,
           winDiagonal: room.winDiagonal,
           allowHandsFree: room.allowHandsFree,
+          backgroundMusicUrl: room.backgroundMusicUrl,
           status: room.status,
         },
         players: room.players.map((p) => ({

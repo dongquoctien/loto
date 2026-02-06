@@ -104,6 +104,15 @@ export class RoomEntity {
   password: string | null;
 
   @Column({
+    name: 'background_music_url',
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+    default: null,
+  })
+  backgroundMusicUrl: string | null;
+
+  @Column({
     type: 'enum',
     enum: ['waiting', 'playing', 'closed'],
     default: 'waiting',

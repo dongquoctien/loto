@@ -38,6 +38,7 @@ interface Room {
   winVertical: boolean;
   winDiagonal: boolean;
   allowHandsFree: boolean;
+  backgroundMusicUrl: string | null;
   status: string;
   players: unknown[];
   password: string | null;
@@ -187,6 +188,11 @@ interface Room {
                   }
                 </div>
                 <div class="form-group">
+                  <label>Nhạc nền YouTube (tùy chọn)</label>
+                  <input [(ngModel)]="backgroundMusicUrl" name="backgroundMusicUrl" placeholder="https://www.youtube.com/watch?v=..." maxlength="500" />
+                  <span class="field-hint">Link video YouTube làm nhạc chờ cho phòng</span>
+                </div>
+                <div class="form-group">
                   <label>Luật thắng (Kinh)</label>
                   <div class="win-rules">
                     <label class="checkbox-label">
@@ -227,6 +233,13 @@ interface Room {
                 <div class="room-name">{{ room.name }}</div>
                 @if (room.password) {
                   <ng-icon name="iconoirLock" class="lock-badge" title="Phòng có mật khẩu"></ng-icon>
+                }
+                @if (room.backgroundMusicUrl) {
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="music-badge" title="Có nhạc nền">
+                    <circle cx="6" cy="18" r="3"/>
+                    <path d="M9 18V5l8-3v13"/>
+                    <circle cx="17" cy="15" r="3"/>
+                  </svg>
                 }
                 <span class="room-code-badge">{{ room.roomCode }}</span>
               </div>
@@ -345,6 +358,7 @@ interface Room {
     .room-name { font-weight: 600; font-size: 16px; color: #1C1E21; }
     .room-code-badge { background: #1877F2; color: white; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 4px; letter-spacing: 0.5px; }
     .lock-badge { font-size: 14px; color: #65676B; }
+    .music-badge { width: 16px; height: 16px; stroke: #1877F2; flex-shrink: 0; }
     .room-meta { display: flex; gap: 12px; color: #65676B; font-size: 13px; flex-wrap: wrap; margin-bottom: 8px; }
     .room-tags { display: flex; gap: 6px; flex-wrap: wrap; }
     .tag { background: #F0F2F5; color: #4B4F56; font-size: 12px; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
@@ -414,6 +428,7 @@ export class LobbyComponent implements OnInit, OnDestroy {
   winDiagonal = false;
   allowHandsFree = false;
   roomPassword = '';
+  backgroundMusicUrl = '';
   showAdvanced = false;
   showProfile = false;
   showUserMenu = false;
@@ -485,6 +500,7 @@ export class LobbyComponent implements OnInit, OnDestroy {
         winVertical: this.winVertical,
         winDiagonal: this.winDiagonal,
         allowHandsFree: this.allowHandsFree,
+        backgroundMusicUrl: this.backgroundMusicUrl?.trim() || undefined,
       })
       .subscribe({
         next: (room) => {

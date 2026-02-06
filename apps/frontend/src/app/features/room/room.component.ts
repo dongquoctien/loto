@@ -25,6 +25,7 @@ import {
 import { SocketService } from '../../core/services/socket.service';
 import { AuthService } from '../../core/services/auth.service';
 import { AudioService } from '../../core/services/audio.service';
+import { YoutubePlayerService } from '../../core/services/youtube-player.service';
 import { checkAllWins, TicketData as SharedTicketData } from '@loto/shared';
 import { environment } from '../../../environments/environment';
 
@@ -53,6 +54,7 @@ interface RoomData {
   winVertical: boolean;
   winDiagonal: boolean;
   allowHandsFree: boolean;
+  backgroundMusicUrl: string | null;
   status: string;
 }
 
@@ -173,9 +175,26 @@ interface SheetInfo {
                   }
                 </button>
               }
-              <button class="sound-toggle" (click)="toggleSound()">
-                <ng-icon [name]="soundEnabled() ? 'iconoirSoundHigh' : 'iconoirSoundOff'"></ng-icon>
-              </button>
+              @if (room()?.backgroundMusicUrl && youtubePlayerService.isLoaded() && gameStatus() === 'preparing') {
+                <button class="music-toggle" [class.muted]="bgMusicMuted()" (click)="toggleBgMusic()" title="Nhạc nền">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="music-icon">
+                    <circle cx="6" cy="18" r="3"/>
+                    <path d="M9 18V5l8-3v13"/>
+                    <circle cx="17" cy="15" r="3"/>
+                    @if (bgMusicMuted()) {
+                      <line x1="2" y1="2" x2="22" y2="22" stroke-width="2.5"/>
+                    } @else {
+                      <path d="M21 9c1 1 1 3 0 4" opacity="0.6"/>
+                      <path d="M23 7c2 2 2 6 0 8" opacity="0.4"/>
+                    }
+                  </svg>
+                </button>
+              }
+              @if (gameStatus() !== 'preparing') {
+                <button class="sound-toggle" (click)="toggleSound()" title="Âm thanh game">
+                  <ng-icon [name]="soundEnabled() ? 'iconoirSoundHigh' : 'iconoirSoundOff'"></ng-icon>
+                </button>
+              }
               <button class="leave-btn" (click)="leaveRoom()" [disabled]="isGameInProgress()">Rời Phòng</button>
             </div>
           </header>
@@ -612,6 +631,11 @@ interface SheetInfo {
     .hands-free-toggle.active { background: rgba(0,164,0,0.2); border-color: #00A400; color: #00A400; }
     .toggle-icon { font-size: 14px;  }
     .sound-toggle { background: none; border: 1px solid #3A3B3C; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 18px; }
+    .music-toggle { background: none; border: 1px solid #3A3B3C; border-radius: 6px; padding: 4px 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .music-toggle .music-icon { width: 20px; height: 20px; stroke: #E4E6EB; }
+    .music-toggle:hover { border-color: #1877F2; }
+    .music-toggle:hover .music-icon { stroke: #1877F2; }
+    .music-toggle.muted .music-icon { stroke: #65676B; }
     .leave-btn {
       background: #FA383E; border: none; color: white; padding: 6px 14px;
       border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit;
@@ -1001,6 +1025,7 @@ export class RoomComponent implements OnInit, OnDestroy {
   private socketService = inject(SocketService);
   private authService = inject(AuthService);
   private audioService = inject(AudioService);
+  youtubePlayerService = inject(YoutubePlayerService);
 
   // Password dialog state
   showPasswordDialog = signal(false);
@@ -1034,6 +1059,7 @@ export class RoomComponent implements OnInit, OnDestroy {
   markedCells = signal<Set<string>>(new Set());
   winHighlightCells = signal<Set<string>>(new Set());
   soundEnabled = signal(true);
+  bgMusicMuted = signal(false);
   handsFreeMode = signal(false);
   private readonly HANDS_FREE_KEY = 'loto_hands_free_mode';
 
@@ -1150,10 +1176,27 @@ export class RoomComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+    this.stopBackgroundMusic();
     const room = this.room();
     if (room) {
       this.socketService.emit('room:leave', { roomId: room.id });
     }
+  }
+
+  private startBackgroundMusic(url: string): void {
+    // Create hidden container for YouTube player
+    let container = document.getElementById('yt-music-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'yt-music-container';
+      container.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;';
+      document.body.appendChild(container);
+    }
+    this.youtubePlayerService.play(url, container);
+  }
+
+  private stopBackgroundMusic(): void {
+    this.youtubePlayerService.destroyPlayer();
   }
 
   getWinTypeLabel(type: string): string {
@@ -1262,6 +1305,13 @@ export class RoomComponent implements OnInit, OnDestroy {
         }
 
         this.audioService.play('join');
+
+        // Play background music if available and game not started
+        console.log('[Room] backgroundMusicUrl:', data.room.backgroundMusicUrl, 'session status:', data.session?.status);
+        if (data.room.backgroundMusicUrl && data.session?.status !== 'active') {
+          console.log('[Room] Starting background music');
+          this.startBackgroundMusic(data.room.backgroundMusicUrl);
+        }
       });
 
     // Player joined
@@ -1365,6 +1415,8 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.players.update((p) => p.map(player => ({ ...player, isReady: false })));
         // Sync auto-call checkbox with room's callMode
         this.autoCallEnabled.set(this.room()?.callMode === 'auto');
+        // Stop background music when game starts
+        this.stopBackgroundMusic();
         this.audioService.play('start');
       });
 
@@ -1589,6 +1641,11 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.challengeResult.set(null);
         // Reset all players' ready status
         this.players.update((p) => p.map(player => ({ ...player, isReady: false })));
+        // Resume background music when game resets
+        const bgMusic = this.room()?.backgroundMusicUrl;
+        if (bgMusic) {
+          this.startBackgroundMusic(bgMusic);
+        }
       });
 
     // Challenge started
@@ -2029,6 +2086,16 @@ export class RoomComponent implements OnInit, OnDestroy {
 
   toggleSound() {
     this.soundEnabled.set(this.audioService.toggle());
+  }
+
+  toggleBgMusic() {
+    if (this.bgMusicMuted()) {
+      this.youtubePlayerService.unmute();
+      this.bgMusicMuted.set(false);
+    } else {
+      this.youtubePlayerService.mute();
+      this.bgMusicMuted.set(true);
+    }
   }
 
   @HostListener('window:resize')

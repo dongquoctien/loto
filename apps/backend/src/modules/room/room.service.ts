@@ -45,6 +45,7 @@ export class RoomService {
       winVertical: dto.winVertical ?? false,
       winDiagonal: dto.winDiagonal ?? false,
       allowHandsFree: dto.allowHandsFree ?? false,
+      backgroundMusicUrl: dto.backgroundMusicUrl || null,
     });
 
     const savedRoom = await this.roomRepository.save(room);

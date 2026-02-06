@@ -61,4 +61,9 @@ export class CreateRoomDto {
   @IsOptional()
   @IsBoolean()
   allowHandsFree?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  backgroundMusicUrl?: string;
 }
