@@ -199,12 +199,12 @@ interface Room {
                       <input type="checkbox" [(ngModel)]="winHorizontal" name="winH" />
                       <ng-icon name="iconoirArrowSeparate" class="rule-icon"></ng-icon> Hàng ngang
                     </label>
-                    <label class="checkbox-label">
-                      <input type="checkbox" [(ngModel)]="winVertical" name="winV" />
+                    <label class="checkbox-label disabled" title="Không áp dụng trong lô tô">
+                      <input type="checkbox" [(ngModel)]="winVertical" name="winV" disabled />
                       <ng-icon name="iconoirArrowSeparateVertical" class="rule-icon"></ng-icon> Hàng dọc
                     </label>
-                    <label class="checkbox-label">
-                      <input type="checkbox" [(ngModel)]="winDiagonal" name="winD" />
+                    <label class="checkbox-label disabled" title="Không áp dụng trong lô tô">
+                      <input type="checkbox" [(ngModel)]="winDiagonal" name="winD" disabled />
                       <ng-icon name="iconoirOpenNewWindow" class="rule-icon"></ng-icon> Đường chéo
                     </label>
                   </div>
@@ -366,6 +366,7 @@ interface Room {
     .no-rooms { color: #65676B; text-align: center; }
     .win-rules { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 4px; }
     .checkbox-label { display: flex !important; align-items: center; gap: 6px; color: #606770; font-size: 14px; cursor: pointer; }
+    .checkbox-label.disabled { opacity: 0.5; cursor: not-allowed; text-decoration: line-through; }
     .checkbox-label input[type="checkbox"] { width: 18px; height: 18px; }
     .interval-options { display: flex; gap: 8px; margin-top: 4px; }
     .interval-btn {

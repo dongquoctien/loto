@@ -15,6 +15,7 @@ export const VOICE_PACKS: { id: VoicePack; label: string; disabled?: boolean }[]
 export class AudioService {
   private audioContext: AudioContext | null = null;
   private enabled = true;
+  private suspended = false;
 
   /** Cached voice audio buffers: voicePack -> number -> AudioBuffer */
   private voiceCache = new Map<string, Map<number, AudioBuffer>>();
@@ -22,13 +23,37 @@ export class AudioService {
   private preloading = new Set<string>();
 
   constructor() {
-    // Resume AudioContext when user returns from sleep/background
+    // Track when AudioContext gets suspended (after sleep/background)
+    // But do NOT auto-resume - browsers block this without user interaction
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible' && this.audioContext?.state === 'suspended') {
-          this.audioContext.resume();
+          // Mark as suspended - will be resumed on next user interaction
+          this.suspended = true;
         }
       });
+    }
+  }
+
+  /**
+   * Check if audio is suspended and needs user interaction to resume.
+   */
+  isSuspended(): boolean {
+    return this.suspended || this.audioContext?.state === 'suspended';
+  }
+
+  /**
+   * Resume AudioContext after user interaction (click/tap).
+   * Call this from click handlers to ensure audio works after sleep/background.
+   */
+  async resumeFromUserInteraction(): Promise<void> {
+    if (this.audioContext?.state === 'suspended') {
+      try {
+        await this.audioContext.resume();
+        this.suspended = false;
+      } catch {
+        // Resume failed - will try again on next interaction
+      }
     }
   }
 
@@ -36,10 +61,8 @@ export class AudioService {
     if (!this.audioContext) {
       this.audioContext = new AudioContext();
     }
-    // Resume AudioContext if suspended (happens after device sleep/background)
-    if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
-    }
+    // Do NOT auto-resume here - browsers block this without user interaction
+    // Instead, caller should use resumeFromUserInteraction() on click/tap
     return this.audioContext;
   }
 

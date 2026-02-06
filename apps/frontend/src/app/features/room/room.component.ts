@@ -151,6 +151,14 @@ interface SheetInfo {
           <p>Đang kết nối phòng...</p>
         </div>
       } @else if (room()) {
+        <!-- Audio Suspended Banner -->
+        @if (audioSuspended() && soundEnabled()) {
+          <div class="audio-suspended-banner" (click)="resumeAudio()">
+            <ng-icon name="iconoirSoundOff" class="banner-icon"></ng-icon>
+            <span>Âm thanh bị tạm dừng. Chạm để bật lại.</span>
+          </div>
+        }
+
         <!-- Sticky Top Area -->
         <div class="sticky-top">
           <!-- Header -->
@@ -584,6 +592,20 @@ interface SheetInfo {
     .loading {
       display: flex; flex-direction: column; align-items: center;
       justify-content: center; height: 100vh; gap: 16px;
+    }
+
+    .audio-suspended-banner {
+      background: linear-gradient(90deg, #FF6B35, #F7931E);
+      color: white; padding: 10px 16px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      cursor: pointer; font-size: 14px; font-weight: 500;
+      animation: pulseBanner 1.5s ease-in-out infinite;
+    }
+    .audio-suspended-banner:hover { filter: brightness(1.1); }
+    .banner-icon { font-size: 18px; }
+    @keyframes pulseBanner {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.85; }
     }
     .spinner {
       width: 40px; height: 40px; border: 3px solid #3A3B3C;
@@ -1061,6 +1083,7 @@ export class RoomComponent implements OnInit, OnDestroy {
   soundEnabled = signal(true);
   bgMusicMuted = signal(false);
   handsFreeMode = signal(false);
+  audioSuspended = signal(false);
   private readonly HANDS_FREE_KEY = 'loto_hands_free_mode';
 
   // Near-win (đang đợi) state: userId -> nearWinCount
@@ -1171,7 +1194,19 @@ export class RoomComponent implements OnInit, OnDestroy {
           this.socketService.emit('room:join', { roomCode: code });
         }
       });
+
+    // Track audio suspended state (after sleep/background)
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', this.onVisibilityChange);
+    }
   }
+
+  private onVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      // Check if audio is suspended after returning from background
+      this.audioSuspended.set(this.audioService.isSuspended());
+    }
+  };
 
   ngOnDestroy() {
     this.destroy$.next();
@@ -1180,6 +1215,10 @@ export class RoomComponent implements OnInit, OnDestroy {
     const room = this.room();
     if (room) {
       this.socketService.emit('room:leave', { roomId: room.id });
+    }
+    // Clean up visibility listener
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.onVisibilityChange);
     }
   }
 
@@ -1761,6 +1800,10 @@ export class RoomComponent implements OnInit, OnDestroy {
   }
 
   onCellClicked(event: { ticketId: number; rowIndex: number; colIndex: number; number: number }) {
+    // Resume AudioContext on user interaction (required after sleep/background)
+    this.audioService.resumeFromUserInteraction();
+    this.audioSuspended.set(false);
+
     const sid = this.sessionId();
     if (!sid) return;
 
@@ -1891,6 +1934,9 @@ export class RoomComponent implements OnInit, OnDestroy {
   }
 
   toggleReady() {
+    // Resume AudioContext on user interaction (required after sleep/background)
+    this.audioService.resumeFromUserInteraction();
+    this.audioSuspended.set(false);
     const newReady = !this.isCurrentUserReady();
     this.socketService.emit('player:set-ready', { ready: newReady });
   }
@@ -2085,7 +2131,17 @@ export class RoomComponent implements OnInit, OnDestroy {
   }
 
   toggleSound() {
+    // Resume AudioContext on user interaction (required after sleep/background)
+    this.audioService.resumeFromUserInteraction();
+    this.audioSuspended.set(false);
     this.soundEnabled.set(this.audioService.toggle());
+  }
+
+  resumeAudio() {
+    this.audioService.resumeFromUserInteraction();
+    this.audioSuspended.set(false);
+    // Play a small sound to confirm audio is working
+    this.audioService.play('mark');
   }
 
   toggleBgMusic() {
