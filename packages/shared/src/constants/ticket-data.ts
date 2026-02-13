@@ -417,9 +417,9 @@ export const FIXED_TICKETS: TicketData[] = [
   {
     id: 48, ticketNumber: 48, colorGroup: 'red',
     rows: [
-      [null, null, null, 38, 44, null, 62, 70, null],
-      [6, 18, null, null, null, 59, null, 74, 83],
-      [null, 17, null, null, 41, null, 60, null, 86],
+      [6, 18, null, 39, null, null, 62, 70, null],
+      [null, null, 25, null, 41, 59, null, 74, 83],
+      [null, 17, null, 38, 44, null, 60, null, 86],
     ],
   },
 ];
