@@ -173,6 +173,9 @@ interface SheetInfo {
                 }
               </span>
               <span class="price-badge">{{ room()?.pricePerSheet | number:'1.0-0' }}đ/tờ</span>
+              @if (totalKinhPrize() > 0) {
+                <span class="kinh-prize-badge">🏆 KINH: {{ totalKinhPrize() | number:'1.0-0' }}đ</span>
+              }
             </div>
             <div class="room-actions">
               @if (room()?.allowHandsFree && myTickets().length > 0 && gameStatus() !== 'preparing' && gameStatus() !== 'finished') {
@@ -380,7 +383,7 @@ interface SheetInfo {
             <!-- Player List -->
             <div class="desktop-player-list">
               <app-player-list
-                [players]="players()"
+                [players]="playersWithSheetCounts()"
                 [ownerId]="room()?.ownerId ?? null"
                 [currentUserId]="currentUserId()"
                 [penalizedPlayers]="penalizedPlayersSet()"
@@ -441,7 +444,7 @@ interface SheetInfo {
           <div class="sheet-panel" (click)="$event.stopPropagation()">
             <div class="sheet-handle"></div>
             <app-player-list
-              [players]="players()"
+              [players]="playersWithSheetCounts()"
               [ownerId]="room()?.ownerId ?? null"
               [currentUserId]="currentUserId()"
               [penalizedPlayers]="penalizedPlayersSet()"
@@ -648,6 +651,21 @@ interface SheetInfo {
       100% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
     }
     .price-badge { background: #00A400; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; color: white; }
+    .kinh-prize-badge {
+      background: linear-gradient(135deg, #FFD700, #FFA500);
+      padding: 2px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #1a1a1a;
+      text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+      box-shadow: 0 1px 3px rgba(255,165,0,0.4);
+      animation: prizePulse 2s ease-in-out infinite;
+    }
+    @keyframes prizePulse {
+      0%, 100% { box-shadow: 0 1px 3px rgba(255,165,0,0.4); }
+      50% { box-shadow: 0 2px 8px rgba(255,165,0,0.6); }
+    }
 
     .room-actions { display: flex; gap: 8px; align-items: center; }
     .hands-free-toggle {
@@ -1048,7 +1066,7 @@ interface SheetInfo {
       .room-header { padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
       .room-title { gap: 6px; min-width: 0; flex: 1; }
       .room-title h2 { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
-      .room-code, .price-badge { font-size: 10px; padding: 1px 6px; }
+      .room-code, .price-badge, .kinh-prize-badge { font-size: 10px; padding: 1px 6px; }
       .room-actions { gap: 6px; flex-shrink: 0; }
       .hands-free-toggle { padding: 3px 8px; font-size: 11px; }
       .sound-toggle { padding: 3px 6px; font-size: 16px; }
@@ -1136,6 +1154,28 @@ export class RoomComponent implements OnInit, OnDestroy {
   challengeTimeoutSeconds = signal(30);
   isChallengeParticipant = computed(() => {
     return this.challengeParticipants().some(p => p.userId === this.currentUserId());
+  });
+
+  // Players with sheet counts
+  playersWithSheetCounts = computed(() => {
+    const players = this.players();
+    const takenMap = this.takenSheets();
+    // Count sheets per user
+    const sheetCountByUser = new Map<number, number>();
+    for (const userId of takenMap.values()) {
+      sheetCountByUser.set(userId, (sheetCountByUser.get(userId) || 0) + 1);
+    }
+    return players.map(p => ({
+      ...p,
+      sheetCount: sheetCountByUser.get(p.userId) || 0,
+    }));
+  });
+
+  // Total prize for KINH (total sheets * price per sheet)
+  totalKinhPrize = computed(() => {
+    const takenMap = this.takenSheets();
+    const pricePerSheet = this.room()?.pricePerSheet || 0;
+    return takenMap.size * pricePerSheet;
   });
   winnerInfo = signal<{
     displayName: string;
