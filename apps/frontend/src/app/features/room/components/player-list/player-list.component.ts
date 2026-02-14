@@ -12,6 +12,7 @@ interface Player {
   isOnline: boolean;
   isReady: boolean;
   winCount: number;
+  sheetCount?: number;
 }
 
 type TabType = 'players' | 'chat';
@@ -68,6 +69,11 @@ type TabType = 'players' | 'chat';
                     @if (mePlayer.userId === ownerId) {
                       <span class="owner-badge">Chủ phòng</span>
                     }
+                    @if (mePlayer.sheetCount && mePlayer.sheetCount > 0) {
+                      <span class="sheet-count-badge">🎫 {{ mePlayer.sheetCount }} tờ</span>
+                    } @else if (roomStatus === 'waiting') {
+                      <span class="no-sheet-badge">Chưa mua vé</span>
+                    }
                     @if (mePlayer.isReady && roomStatus === 'waiting' && mePlayer.userId !== ownerId) {
                       <span class="ready-badge">SẴN SÀNG</span>
                     }
@@ -103,6 +109,11 @@ type TabType = 'players' | 'chat';
                   <div class="player-badges">
                     @if (player.userId === ownerId) {
                       <span class="owner-badge">Chủ phòng</span>
+                    }
+                    @if (player.sheetCount && player.sheetCount > 0) {
+                      <span class="sheet-count-badge">🎫 {{ player.sheetCount }} tờ</span>
+                    } @else if (roomStatus === 'waiting') {
+                      <span class="no-sheet-badge">Chưa mua vé</span>
                     }
                     @if (player.isReady && roomStatus === 'waiting' && player.userId !== ownerId) {
                       <span class="ready-badge">SẴN SÀNG</span>
@@ -318,6 +329,21 @@ type TabType = 'players' | 'chat';
       text-shadow: 0 0 8px rgba(255, 215, 0, 0.8), 0 0 16px rgba(255, 165, 0, 0.4);
       box-shadow: 0 0 6px rgba(255, 215, 0, 0.3), inset 0 0 4px rgba(255, 215, 0, 0.1);
       animation: readyPulse 1.5s ease-in-out infinite;
+    }
+    .sheet-count-badge {
+      font-size: 10px;
+      color: #4CAF50;
+      font-weight: 600;
+      background: rgba(76, 175, 80, 0.12);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid rgba(76, 175, 80, 0.3);
+    }
+    .no-sheet-badge {
+      font-size: 10px;
+      color: #FF9800;
+      font-weight: 500;
+      opacity: 0.8;
     }
     @keyframes readyPulse {
       0%, 100% {
