@@ -1,4 +1,4 @@
-import { Component, Input, signal, inject, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, signal, inject, OnInit, OnDestroy, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { iconoirGroup, iconoirChatBubble } from '@ng-icons/iconoir';
@@ -415,7 +415,7 @@ type TabType = 'players' | 'chat';
     }
   `],
 })
-export class PlayerListComponent implements OnInit, OnDestroy {
+export class PlayerListComponent implements OnInit, OnDestroy, OnChanges {
   @Input() players: Player[] = [];
   @Input() ownerId: number | null = null;
   @Input() currentUserId: number | null = null;
@@ -423,6 +423,7 @@ export class PlayerListComponent implements OnInit, OnDestroy {
   @Input() nearWinPlayers: Map<number, number> = new Map();
   @Input() kinhClaimantIds: number[] = [];
   @Input() roomStatus: 'waiting' | 'playing' = 'waiting';
+  @Input() isSheetOpen = false;
 
   chatService = inject(ChatService);
 
@@ -431,6 +432,13 @@ export class PlayerListComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     // Mark panel as closed initially
     this.chatService.closePanel();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    // When sheet opens and chat tab is active, mark panel as open
+    if (changes['isSheetOpen'] && this.isSheetOpen && this.activeTab() === 'chat') {
+      this.chatService.openPanel();
+    }
   }
 
   ngOnDestroy(): void {
