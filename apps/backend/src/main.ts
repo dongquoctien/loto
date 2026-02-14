@@ -13,9 +13,16 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
-  // Serve uploaded files statically at /uploads
+  // Serve uploaded files statically at /uploads with CORS
   const uploadDir = configService.get<string>('UPLOAD_DIR', './uploads');
-  app.useStaticAssets(join(process.cwd(), uploadDir), { prefix: '/uploads/' });
+  const corsOrigin = configService.get<string>('CORS_ORIGIN', 'http://localhost:4200');
+  app.useStaticAssets(join(process.cwd(), uploadDir), {
+    prefix: '/uploads/',
+    setHeaders: (res) => {
+      res.setHeader('Access-Control-Allow-Origin', corsOrigin);
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    },
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
