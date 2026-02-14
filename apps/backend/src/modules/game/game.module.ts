@@ -8,8 +8,11 @@ import { GameResultEntity } from './entities/game-result.entity';
 import { PenaltyEntity } from './entities/penalty.entity';
 import { KinhClaimEntity } from './entities/kinh-claim.entity';
 import { GameService } from './game.service';
+import { ReportService } from './report.service';
+import { ReportController } from './report.controller';
 import { TicketModule } from '../ticket/ticket.module';
 import { RoomModule } from '../room/room.module';
+import { UserModule } from '../user/user.module';
 
 @Module({
   imports: [
@@ -24,8 +27,10 @@ import { RoomModule } from '../room/room.module';
     ]),
     TicketModule,
     forwardRef(() => RoomModule),
+    UserModule,
   ],
-  providers: [GameService],
-  exports: [GameService],
+  controllers: [ReportController],
+  providers: [GameService, ReportService],
+  exports: [GameService, ReportService],
 })
 export class GameModule {}

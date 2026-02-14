@@ -15,6 +15,6 @@ import { GatewayModule } from '../gateway/gateway.module';
   ],
   controllers: [RoomController],
   providers: [RoomService, ChatService],
-  exports: [RoomService, ChatService],
+  exports: [RoomService, ChatService, TypeOrmModule],
 })
 export class RoomModule {}

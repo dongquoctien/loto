@@ -21,12 +21,14 @@ import {
   iconoirBell,
   iconoirPause,
   iconoirFlash,
+  iconoirStatsUpSquare,
 } from '@ng-icons/iconoir';
 import { SocketService } from '../../core/services/socket.service';
 import { AuthService } from '../../core/services/auth.service';
 import { AudioService } from '../../core/services/audio.service';
 import { YoutubePlayerService } from '../../core/services/youtube-player.service';
 import { ChatService } from '../../core/services/chat.service';
+import { ReportService } from '../../core/services/report.service';
 import { checkAllWins, TicketData as SharedTicketData } from '@loto/shared';
 import { environment } from '../../../environments/environment';
 
@@ -41,6 +43,7 @@ import { WinnerOverlayComponent, PaymentReportItem } from './components/winner-o
 import { PlayerListComponent } from './components/player-list/player-list.component';
 import { KinhClaimOverlayComponent } from './components/kinh-claim-overlay/kinh-claim-overlay.component';
 import { ChallengeOverlayComponent } from './components/challenge-overlay/challenge-overlay.component';
+import { ReportDialogComponent } from './components/report-dialog/report-dialog.component';
 
 interface RoomData {
   id: number;
@@ -99,6 +102,7 @@ interface SheetInfo {
     PlayerListComponent,
     KinhClaimOverlayComponent,
     ChallengeOverlayComponent,
+    ReportDialogComponent,
   ],
   viewProviders: [
     provideIcons({
@@ -117,6 +121,7 @@ interface SheetInfo {
       iconoirBell,
       iconoirPause,
       iconoirFlash,
+      iconoirStatsUpSquare,
     }),
   ],
   template: `
@@ -174,7 +179,7 @@ interface SheetInfo {
               </span>
               <span class="price-badge">{{ room()?.pricePerSheet | number:'1.0-0' }}đ/tờ</span>
               @if (totalKinhPrize() > 0) {
-                <span class="kinh-prize-badge">🏆 KINH: {{ totalKinhPrize() | number:'1.0-0' }}đ</span>
+                <span class="kinh-prize-badge">🏆 {{ totalKinhPrize() | number:'1.0-0' }}đ</span>
               }
             </div>
             <div class="room-actions">
@@ -207,6 +212,9 @@ interface SheetInfo {
                   <ng-icon [name]="soundEnabled() ? 'iconoirSoundHigh' : 'iconoirSoundOff'"></ng-icon>
                 </button>
               }
+              <button class="report-btn" (click)="openReportDialog()" title="Báo cáo thống kê">
+                <ng-icon name="iconoirStatsUpSquare"></ng-icon>
+              </button>
               <button class="leave-btn" (click)="leaveRoom()" [disabled]="isGameInProgress()">Rời Phòng</button>
             </div>
           </header>
@@ -554,6 +562,11 @@ interface SheetInfo {
           (dismissed)="dismissWinner()">
         </app-winner-overlay>
       }
+
+      <!-- Report Dialog -->
+      @if (showReportDialog()) {
+        <app-report-dialog (close)="closeReportDialog()"></app-report-dialog>
+      }
     </div>
   `,
   styles: [`
@@ -676,6 +689,8 @@ interface SheetInfo {
     .hands-free-toggle.active { background: rgba(0,164,0,0.2); border-color: #00A400; color: #00A400; }
     .toggle-icon { font-size: 14px;  }
     .sound-toggle { background: none; border: 1px solid #3A3B3C; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 18px; }
+    .report-btn { background: none; border: 1px solid #3A3B3C; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 18px; color: #E4E6EB; }
+    .report-btn:hover { border-color: #1877F2; color: #1877F2; }
     .music-toggle { background: none; border: 1px solid #3A3B3C; border-radius: 6px; padding: 4px 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .music-toggle .music-icon { width: 20px; height: 20px; stroke: #E4E6EB; }
     .music-toggle:hover { border-color: #1877F2; }
@@ -1069,7 +1084,7 @@ interface SheetInfo {
       .room-code, .price-badge, .kinh-prize-badge { font-size: 10px; padding: 1px 6px; }
       .room-actions { gap: 6px; flex-shrink: 0; }
       .hands-free-toggle { padding: 3px 8px; font-size: 11px; }
-      .sound-toggle { padding: 3px 6px; font-size: 16px; }
+      .sound-toggle, .report-btn { padding: 3px 6px; font-size: 16px; }
       .leave-btn { padding: 4px 10px; font-size: 12px; white-space: nowrap; }
       .game-area { padding: 10px 12px; }
       .room-body { flex-direction: column; }
@@ -1096,6 +1111,10 @@ export class RoomComponent implements OnInit, OnDestroy {
   private audioService = inject(AudioService);
   youtubePlayerService = inject(YoutubePlayerService);
   chatService = inject(ChatService);
+  private reportService = inject(ReportService);
+
+  // Report dialog state
+  showReportDialog = signal(false);
 
   // Password dialog state
   showPasswordDialog = signal(false);
@@ -2272,5 +2291,17 @@ export class RoomComponent implements OnInit, OnDestroy {
     this.isCurrentUserWinner.set(false);
     this.paymentReport.set([]);
     this.totalWinAmount.set(0);
+  }
+
+  openReportDialog() {
+    const roomCode = this.room()?.roomCode;
+    if (roomCode) {
+      this.reportService.loadAllReports(roomCode);
+      this.showReportDialog.set(true);
+    }
+  }
+
+  closeReportDialog() {
+    this.showReportDialog.set(false);
   }
 }
