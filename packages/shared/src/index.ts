@@ -5,6 +5,7 @@ export * from './types/room.types';
 export * from './types/game.types';
 export * from './types/socket-events.types';
 export * from './types/chat.types';
+export * from './types/report.types';
 
 // Stickers
 export * from './stickers';
