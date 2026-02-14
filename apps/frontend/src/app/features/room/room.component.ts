@@ -26,6 +26,7 @@ import { SocketService } from '../../core/services/socket.service';
 import { AuthService } from '../../core/services/auth.service';
 import { AudioService } from '../../core/services/audio.service';
 import { YoutubePlayerService } from '../../core/services/youtube-player.service';
+import { ChatService } from '../../core/services/chat.service';
 import { checkAllWins, TicketData as SharedTicketData } from '@loto/shared';
 import { environment } from '../../../environments/environment';
 
@@ -879,9 +880,17 @@ interface SheetInfo {
     .sheet-panel {
       position: absolute; bottom: 0; left: 0; right: 0;
       background: #242526; border-radius: 16px 16px 0 0;
-      max-height: 70vh; overflow-y: auto;
+      max-height: 75vh; overflow: hidden;
       transform: translateY(100%); transition: transform 0.3s ease-out;
       padding: 12px 16px calc(24px + 68px);
+      display: flex;
+      flex-direction: column;
+    }
+    .sheet-panel app-player-list {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
     }
     .sheet-backdrop.open .sheet-panel { transform: translateY(0); }
     .sheet-handle { width: 36px; height: 4px; background: #65676B; border-radius: 2px; margin: 0 auto 12px; }
@@ -976,8 +985,8 @@ interface SheetInfo {
         flex-direction: column;
         position: fixed;
         top: 140px;
-        right: calc((100vw - 1600px) / 2 + 24px);
-        width: 280px;
+        right: calc((100vw - 1600px) / 2);
+        width: 300px;
         max-height: calc(100vh - 160px);
         z-index: 50;
         gap: 12px;
@@ -992,11 +1001,19 @@ interface SheetInfo {
       .desktop-player-list {
         flex: 1;
         min-height: 0;
-        overflow-y: auto;
+        overflow: hidden;
         background: #242526;
         border-radius: 12px;
         padding: 12px;
         box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        display: flex;
+        flex-direction: column;
+      }
+      .desktop-player-list app-player-list {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
       }
       .sidebar-ready-section {
         display: block;
@@ -1048,6 +1065,7 @@ export class RoomComponent implements OnInit, OnDestroy {
   private authService = inject(AuthService);
   private audioService = inject(AudioService);
   youtubePlayerService = inject(YoutubePlayerService);
+  private chatService = inject(ChatService);
 
   // Password dialog state
   showPasswordDialog = signal(false);
@@ -1212,6 +1230,7 @@ export class RoomComponent implements OnInit, OnDestroy {
     this.destroy$.next();
     this.destroy$.complete();
     this.stopBackgroundMusic();
+    this.chatService.leaveRoom();
     const room = this.room();
     if (room) {
       this.socketService.emit('room:leave', { roomId: room.id });
@@ -1276,7 +1295,7 @@ export class RoomComponent implements OnInit, OnDestroy {
   private setupSocketListeners() {
     // Room joined
     this.socketService
-      .on<{ room: RoomData; players: Player[]; sheets: SheetInfo[]; session?: { id: number; status: string; calledNumbers: number[] }; purchasedSheets?: Record<string, number>; markedCells?: string[] }>('room:joined')
+      .on<{ room: RoomData; players: Player[]; sheets: SheetInfo[]; session?: { id: number; status: string; calledNumbers: number[] }; purchasedSheets?: Record<string, number>; markedCells?: string[]; chatHistory?: Array<{ id: string; senderId: number; senderName: string; senderAvatar: string | null; content: string; timestamp: Date; type: 'text' | 'system' }> }>('room:joined')
       .pipe(takeUntil(this.destroy$))
       .subscribe((data) => {
         // Close password dialog on successful join
@@ -1288,6 +1307,12 @@ export class RoomComponent implements OnInit, OnDestroy {
         this.room.set(data.room);
         this.players.set(data.players);
         this.availableSheets.set(data.sheets);
+
+        // Join chat for this room and load history
+        this.chatService.joinRoom(data.room.roomCode);
+        if (data.chatHistory && data.chatHistory.length > 0) {
+          this.chatService.loadHistory(data.chatHistory);
+        }
 
         // Restore hands-free mode preference if room allows it
         if (data.room.allowHandsFree) {

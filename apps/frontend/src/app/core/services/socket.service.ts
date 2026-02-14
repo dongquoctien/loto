@@ -72,6 +72,12 @@ export class SocketService implements OnDestroy {
 
     this.socket.on('connect_error', (error) => {
       console.error('Socket connection error:', error.message);
+
+      // Check if error is due to authentication failure (token expired/invalid)
+      if (error.message?.includes('jwt') || error.message?.includes('unauthorized') || error.message?.includes('token')) {
+        alert('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại');
+        this.authService.logout();
+      }
     });
   }
 
@@ -87,15 +93,25 @@ export class SocketService implements OnDestroy {
 
   on<T>(event: string): Observable<T> {
     return new Observable<T>((subscriber) => {
-      if (!this.socket) {
-        subscriber.error('Socket not connected');
-        return;
+      // Handler function to attach to socket
+      const handler = (data: T) => subscriber.next(data);
+
+      // If socket exists, attach handler immediately
+      if (this.socket) {
+        this.socket.on(event, handler);
       }
 
-      const handler = (data: T) => subscriber.next(data);
-      this.socket.on(event, handler);
+      // Subscribe to connection state to attach handler when socket connects
+      const stateSub = this.connectionState$.subscribe((state) => {
+        if (state === 'connected' && this.socket) {
+          // Re-attach handler on reconnection (socket.io auto-removes on disconnect)
+          this.socket.off(event, handler); // Remove to avoid duplicates
+          this.socket.on(event, handler);
+        }
+      });
 
       return () => {
+        stateSub.unsubscribe();
         this.socket?.off(event, handler);
       };
     });

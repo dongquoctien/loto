@@ -12,9 +12,10 @@ import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { GameService } from '../game/game.service';
 import { RoomService } from '../room/room.service';
+import { ChatService } from '../room/chat.service';
 import { TicketService } from '../ticket/ticket.service';
 import { UserService } from '../user/user.service';
-import { WinType, LineDetails, checkNearWins, TicketData } from '@loto/shared';
+import { WinType, LineDetails, checkNearWins, TicketData, ChatSendPayload, ChatMessagePayload, ChatTypingPayload, PaymentTogglePaidPayload, PaymentReportData, getStickerById } from '@loto/shared';
 
 interface AuthenticatedSocket extends Socket {
   userId?: number;
@@ -53,6 +54,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly jwtService: JwtService,
     private readonly gameService: GameService,
     private readonly roomService: RoomService,
+    private readonly chatService: ChatService,
     private readonly ticketService: TicketService,
     private readonly userService: UserService,
   ) {}
@@ -202,6 +204,20 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         userMarkedCells = await this.gameService.getUserMarkedCells(state.sessionId, client.userId);
       }
 
+      // Load recent chat history
+      const recentMessages = await this.chatService.getRecentMessages(room.id, 50);
+      const chatHistory = recentMessages.reverse().map((msg) => ({
+        id: String(msg.id),
+        senderId: msg.senderId,
+        senderName: msg.sender?.displayName || msg.sender?.username || 'Unknown',
+        senderAvatar: msg.sender?.avatarUrl || null,
+        content: msg.content,
+        timestamp: msg.createdAt,
+        type: msg.type,
+        paymentData: msg.paymentData || undefined,
+        stickerId: msg.stickerId || undefined,
+      }));
+
       client.emit('room:joined', {
         room: {
           id: room.id,
@@ -231,6 +247,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         session: sessionData,
         purchasedSheets: purchasedSheetsMap,
         markedCells: userMarkedCells,
+        chatHistory,
       });
 
       // If game is paused for kinh, send claims to reconnecting client
@@ -901,6 +918,153 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
+  @SubscribeMessage('chat:send')
+  async handleChatSend(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: ChatSendPayload,
+  ) {
+    if (!client.userId || !client.currentRoomId) return;
+
+    try {
+      const user = await this.userService.findById(client.userId);
+
+      // Check if it's a sticker message
+      if (data.stickerId) {
+        const sticker = getStickerById(data.stickerId);
+        if (!sticker) {
+          client.emit('error', { message: 'Sticker không tồn tại' });
+          return;
+        }
+
+        // Save sticker message to database
+        const savedMessage = await this.chatService.saveStickerMessage(
+          client.currentRoomId,
+          client.userId,
+          data.stickerId,
+        );
+
+        const message: ChatMessagePayload = {
+          id: String(savedMessage.id),
+          senderId: client.userId,
+          senderName: user.displayName || user.username,
+          senderAvatar: user.avatarUrl,
+          content: '',
+          timestamp: savedMessage.createdAt,
+          type: 'sticker',
+          stickerId: data.stickerId,
+          roomCode: data.roomCode,
+        };
+
+        this.server.to(`room:${client.currentRoomId}`).emit('chat:message', message);
+        return;
+      }
+
+      // Regular text message
+      const content = data.content.trim();
+      if (!content) return;
+
+      // Save message to database
+      const savedMessage = await this.chatService.saveMessage(
+        client.currentRoomId,
+        client.userId,
+        content,
+        'text',
+      );
+
+      const message: ChatMessagePayload = {
+        id: String(savedMessage.id),
+        senderId: client.userId,
+        senderName: user.displayName || user.username,
+        senderAvatar: user.avatarUrl,
+        content,
+        timestamp: savedMessage.createdAt,
+        type: 'text',
+        roomCode: data.roomCode,
+      };
+
+      // Broadcast to all players in the room
+      this.server.to(`room:${client.currentRoomId}`).emit('chat:message', message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to send message';
+      client.emit('error', { message });
+    }
+  }
+
+  @SubscribeMessage('chat:typing')
+  async handleChatTyping(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: ChatTypingPayload,
+  ) {
+    if (!client.userId || !client.currentRoomId) return;
+
+    try {
+      const user = await this.userService.findById(client.userId);
+
+      // Broadcast typing status to other players in the room (not sender)
+      client.to(`room:${client.currentRoomId}`).emit('chat:typing', {
+        roomCode: data.roomCode,
+        user: {
+          userId: client.userId,
+          displayName: user.displayName || user.username,
+        },
+        isTyping: data.isTyping,
+      });
+    } catch {
+      // Silently ignore typing errors
+    }
+  }
+
+  @SubscribeMessage('payment:toggle-paid')
+  async handlePaymentTogglePaid(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: PaymentTogglePaidPayload,
+  ) {
+    if (!client.userId || !client.currentRoomId) return;
+
+    try {
+      const messageId = parseInt(data.messageId, 10);
+      const message = await this.chatService.findMessageById(messageId);
+
+      if (!message || message.type !== 'payment_report' || !message.paymentData) {
+        client.emit('error', { message: 'Không tìm thấy tin nhắn báo cáo' });
+        return;
+      }
+
+      // Only winner or the specific payer can toggle paid status
+      const isWinner = client.userId === message.paymentData.winnerId;
+      const isPayer = data.payerUserId === client.userId;
+
+      if (!isWinner && !isPayer) {
+        client.emit('error', { message: 'Bạn không có quyền thay đổi trạng thái này' });
+        return;
+      }
+
+      // Update the payment status
+      const updatedMessage = await this.chatService.updatePaymentStatus(
+        messageId,
+        data.payerUserId,
+        data.paid,
+      );
+
+      if (!updatedMessage) {
+        client.emit('error', { message: 'Không thể cập nhật trạng thái thanh toán' });
+        return;
+      }
+
+      // Broadcast the update to all players in the room
+      this.server.to(`room:${client.currentRoomId}`).emit('payment:status-updated', {
+        roomCode: data.roomCode,
+        messageId: data.messageId,
+        payerUserId: data.payerUserId,
+        paid: data.paid,
+        updatedBy: client.userId,
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to toggle payment';
+      client.emit('error', { message });
+    }
+  }
+
   private callAndBroadcastNumber(sessionId: number, roomId: number): void {
     const number = this.gameService.callNextNumber(sessionId);
     if (number === null) {
@@ -1184,6 +1348,45 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
           winnerQrCodeUrl: winner.qrCodeUrl,
         });
       }
+    }
+
+    // Auto-send payment report chat message
+    if (paymentReport.length > 0) {
+      const paymentData: PaymentReportData = {
+        winnerId,
+        winnerName: winner.displayName || winner.username,
+        winnerAvatar: winner.avatarUrl,
+        winnerQrCodeUrl: winner.qrCodeUrl,
+        winType: result.winType as 'horizontal' | 'vertical' | 'diagonal',
+        totalAmount: totalWinAmount,
+        payers: paymentReport.map((p) => ({
+          userId: p.userId,
+          displayName: p.displayName,
+          avatarUrl: p.avatarUrl,
+          sheetCount: p.sheetCount,
+          amount: p.amount,
+          paid: false,
+        })),
+      };
+
+      const savedPaymentMsg = await this.chatService.savePaymentReportMessage(
+        roomId,
+        winnerId,
+        paymentData,
+      );
+
+      // Broadcast to room
+      this.server.to(`room:${roomId}`).emit('chat:message', {
+        id: String(savedPaymentMsg.id),
+        senderId: winnerId,
+        senderName: winner.displayName || winner.username,
+        senderAvatar: winner.avatarUrl,
+        content: '📋 Kết quả Lô Tô',
+        timestamp: savedPaymentMsg.createdAt,
+        type: 'payment_report',
+        paymentData,
+        roomCode: room.roomCode,
+      });
     }
   }
 

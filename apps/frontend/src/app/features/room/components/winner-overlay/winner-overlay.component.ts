@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ElementRef, ViewChild, signal } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { iconoirTrophy, iconoirCheck, iconoirCopy } from '@ng-icons/iconoir';
+import { iconoirTrophy, iconoirCheck, iconoirCopy, iconoirShareAndroid } from '@ng-icons/iconoir';
 
 export interface PaymentReportItem {
   userId: number;
@@ -28,7 +28,7 @@ interface ConfettiParticle {
   selector: 'app-winner-overlay',
   standalone: true,
   imports: [CommonModule, DecimalPipe, NgIcon],
-  viewProviders: [provideIcons({ iconoirTrophy, iconoirCheck, iconoirCopy })],
+  viewProviders: [provideIcons({ iconoirTrophy, iconoirCheck, iconoirCopy, iconoirShareAndroid })],
   template: `
     <div class="overlay" (click)="dismissed.emit()">
       <!-- Confetti canvas behind the card -->
@@ -66,13 +66,26 @@ interface ConfettiParticle {
           <div class="payment-report">
             <div class="report-header">
               <h4>Danh sách thanh toán</h4>
-              <button class="copy-btn" (click)="copyReport($event)">
-                @if (copySuccess()) {
-                  <ng-icon name="iconoirCheck" class="copy-icon"></ng-icon> Đã copy
-                } @else {
-                  <ng-icon name="iconoirCopy" class="copy-icon"></ng-icon> Copy
+              <div class="report-actions">
+                <button class="copy-btn" (click)="copyReport($event)" [disabled]="copySuccess() || copyQrSuccess()">
+                  @if (copySuccess()) {
+                    <ng-icon name="iconoirCheck" class="copy-icon"></ng-icon> Đã copy
+                  } @else {
+                    <ng-icon name="iconoirCopy" class="copy-icon"></ng-icon> Copy
+                  }
+                </button>
+                @if (winner.qrCodeUrl) {
+                  <button class="copy-qr-btn" (click)="copyReportWithQR($event)" [disabled]="copySuccess() || copyQrSuccess() || copyingQr()">
+                    @if (copyQrSuccess()) {
+                      <ng-icon name="iconoirCheck" class="copy-icon"></ng-icon> Đã copy
+                    } @else if (copyingQr()) {
+                      <span class="loading-dot"></span> Đang tạo...
+                    } @else {
+                      <ng-icon name="iconoirShareAndroid" class="copy-icon"></ng-icon> Ảnh QR
+                    }
+                  </button>
                 }
-              </button>
+              </div>
             </div>
             <div class="report-list">
               @for (item of paymentReport; track item.userId) {
@@ -115,6 +128,25 @@ interface ConfettiParticle {
 
         <button class="dismiss-btn" (click)="dismissed.emit()">Đã hiểu</button>
       </div>
+
+      <!-- Image Preview Modal -->
+      @if (generatedImageUrl()) {
+        <div class="image-modal" (click)="closeImageModal($event)">
+          <div class="image-modal-content" (click)="$event.stopPropagation()">
+            <div class="image-modal-header">
+              <span>Nhấn giữ ảnh để copy/lưu</span>
+              <button class="close-modal-btn" (click)="closeImageModal($event)">✕</button>
+            </div>
+            <img [src]="generatedImageUrl()" alt="Kết quả Lô Tô" class="generated-image" />
+            <div class="image-modal-actions">
+              <button class="download-btn" (click)="downloadGeneratedImage($event)">
+                📥 Tải xuống
+              </button>
+            </div>
+            <p class="image-hint">💡 PC: Click phải → Copy image<br/>📱 Mobile: Nhấn giữ → Chia sẻ</p>
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -356,20 +388,130 @@ interface ConfettiParticle {
       font-size: 12px;
       font-weight: 600;
     }
-    .copy-btn {
+    .report-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .copy-btn, .copy-qr-btn {
       background: rgba(255, 215, 0, 0.12);
       border: 1px solid rgba(255, 215, 0, 0.25);
       color: #FFD700;
-      padding: 2px 10px;
+      padding: 2px 8px;
       border-radius: 5px;
-      font-size: 11px;
+      font-size: 10px;
       cursor: pointer;
       font-family: inherit;
       font-weight: 600;
       transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      white-space: nowrap;
     }
-    .copy-btn:hover { background: rgba(255, 215, 0, 0.2); }
-    .copy-icon { font-size: 12px;  }
+    .copy-btn:hover:not(:disabled), .copy-qr-btn:hover:not(:disabled) {
+      background: rgba(255, 215, 0, 0.2);
+    }
+    .copy-btn:disabled, .copy-qr-btn:disabled {
+      opacity: 0.7;
+      cursor: default;
+    }
+    .copy-qr-btn {
+      background: rgba(24, 119, 242, 0.15);
+      border-color: rgba(24, 119, 242, 0.3);
+      color: #4dabf7;
+    }
+    .copy-qr-btn:hover:not(:disabled) {
+      background: rgba(24, 119, 242, 0.25);
+    }
+    .copy-icon { font-size: 11px; }
+    .loading-dot {
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(77, 171, 247, 0.3);
+      border-top-color: #4dabf7;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Image Preview Modal */
+    .image-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.95);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      padding: 16px;
+      animation: overlayFadeIn 0.2s ease-out;
+    }
+    .image-modal-content {
+      background: #2C2D2E;
+      border-radius: 12px;
+      padding: 12px;
+      max-width: 380px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .image-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      color: #B0B3B8;
+      font-size: 12px;
+    }
+    .close-modal-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      color: #E4E6EB;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+    .close-modal-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+    .generated-image {
+      width: 100%;
+      border-radius: 8px;
+      display: block;
+    }
+    .image-modal-actions {
+      margin-top: 12px;
+      display: flex;
+      gap: 8px;
+    }
+    .download-btn {
+      flex: 1;
+      background: linear-gradient(135deg, #1877F2, #1565D8);
+      border: none;
+      color: white;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+    .download-btn:hover {
+      background: linear-gradient(135deg, #1565D8, #1254B5);
+    }
+    .image-hint {
+      margin: 10px 0 0;
+      color: #B0B3B8;
+      font-size: 11px;
+      text-align: center;
+      line-height: 1.5;
+    }
     .report-list {
       max-height: 140px;
       overflow-y: auto;
@@ -513,6 +655,9 @@ export class WinnerOverlayComponent implements OnInit, OnDestroy {
   @Output() dismissed = new EventEmitter<void>();
 
   copySuccess = signal(false);
+  copyQrSuccess = signal(false);
+  copyingQr = signal(false);
+  generatedImageUrl = signal<string | null>(null);
 
   private particles: ConfettiParticle[] = [];
   private animFrameId = 0;
@@ -568,6 +713,206 @@ export class WinnerOverlayComponent implements OnInit, OnDestroy {
     navigator.clipboard.writeText(lines.join('\n')).then(() => {
       this.copySuccess.set(true);
       setTimeout(() => this.copySuccess.set(false), 2000);
+    });
+  }
+
+  async copyReportWithQR(event: Event) {
+    event.stopPropagation();
+    if (!this.paymentReport.length || !this.winner.qrCodeUrl) return;
+
+    this.copyingQr.set(true);
+
+    try {
+      // Try to load QR image (may fail due to CORS)
+      let qrImage: HTMLImageElement | null = null;
+      try {
+        qrImage = await this.loadImage(this.winner.qrCodeUrl);
+      } catch {
+        console.warn('Failed to load QR image, will render without it');
+      }
+
+      // Create canvas
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+
+      // Canvas dimensions
+      const padding = 24;
+      const qrSize = qrImage ? 200 : 0;
+      const playerRowHeight = 32;
+      const totalRowHeight = 40;
+      const winTypeHeight = this.winner.winType ? 20 : 0;
+
+      // Calculate height based on actual drawing sequence
+      const contentHeight =
+        padding +           // top padding
+        36 +                // header text
+        24 +                // winner info
+        winTypeHeight +     // win type (if exists)
+        10 +                // gap before divider
+        12 +                // divider + gap
+        24 +                // payment list header
+        (this.paymentReport.length * playerRowHeight) + // payment rows
+        12 +                // divider after rows
+        totalRowHeight +    // total row
+        (qrImage ? (8 + 20 + qrSize) : 0) + // QR section: gap + text + image
+        padding;            // bottom padding
+
+      canvas.width = 360;
+      canvas.height = contentHeight;
+
+      // Background
+      ctx.fillStyle = '#1A1B1C';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Border
+      ctx.strokeStyle = '#FFD700';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(1.5, 1.5, canvas.width - 3, canvas.height - 3);
+
+      let y = padding;
+
+      // Header
+      ctx.fillStyle = '#FFD700';
+      ctx.font = 'bold 20px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('🏆 KẾT QUẢ LÔ TÔ 🏆', canvas.width / 2, y + 24);
+      y += 36;
+
+      // Winner info
+      ctx.fillStyle = '#E4E6EB';
+      ctx.font = '14px Arial, sans-serif';
+      ctx.fillText(`Người thắng: ${this.winner.displayName}`, canvas.width / 2, y + 16);
+      y += 24;
+
+      if (this.winner.winType) {
+        ctx.fillStyle = '#B0B3B8';
+        ctx.font = '12px Arial, sans-serif';
+        ctx.fillText(`Kiểu thắng: ${this.getWinTypeLabel(this.winner.winType)}`, canvas.width / 2, y + 12);
+        y += 20;
+      }
+
+      y += 10;
+
+      // Divider
+      ctx.strokeStyle = 'rgba(255, 215, 0, 0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padding, y);
+      ctx.lineTo(canvas.width - padding, y);
+      ctx.stroke();
+      y += 12;
+
+      // Payment list header
+      ctx.fillStyle = '#FFD700';
+      ctx.font = 'bold 12px Arial, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('📋 Danh sách thanh toán:', padding, y + 12);
+      y += 24;
+
+      // Payment rows
+      ctx.font = '13px Arial, sans-serif';
+      for (const item of this.paymentReport) {
+        const amount = item.amount.toLocaleString('vi-VN');
+
+        ctx.fillStyle = '#E4E6EB';
+        ctx.textAlign = 'left';
+        const nameText = item.displayName.length > 18
+          ? item.displayName.substring(0, 16) + '...'
+          : item.displayName;
+        ctx.fillText(`• ${nameText}`, padding, y + 14);
+
+        ctx.fillStyle = '#00A400';
+        ctx.textAlign = 'right';
+        ctx.fillText(`${item.sheetCount} tờ - ${amount}đ`, canvas.width - padding, y + 14);
+
+        y += playerRowHeight;
+      }
+
+      // Divider
+      ctx.strokeStyle = 'rgba(255, 215, 0, 0.3)';
+      ctx.beginPath();
+      ctx.moveTo(padding, y);
+      ctx.lineTo(canvas.width - padding, y);
+      ctx.stroke();
+      y += 12;
+
+      // Total
+      ctx.fillStyle = '#FFD700';
+      ctx.font = 'bold 16px Arial, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('💰 Tổng:', padding, y + 20);
+      ctx.textAlign = 'right';
+      ctx.fillText(`${this.totalWinAmount.toLocaleString('vi-VN')}đ`, canvas.width - padding, y + 20);
+      y += totalRowHeight;
+
+      // QR Code section (only if image loaded successfully)
+      if (qrImage) {
+        y += 8;
+        ctx.fillStyle = '#B0B3B8';
+        ctx.font = '12px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Chuyển khoản cho người thắng:', canvas.width / 2, y + 12);
+        y += 20;
+
+        // Draw QR code centered
+        const qrX = (canvas.width - qrSize) / 2;
+        ctx.drawImage(qrImage, qrX, y, qrSize, qrSize);
+      }
+
+      // Convert canvas to data URL and show in modal
+      const dataUrl = canvas.toDataURL('image/png');
+      this.generatedImageUrl.set(dataUrl);
+
+    } catch (error) {
+      console.error('Failed to create report image:', error);
+      alert('Không thể tạo ảnh báo cáo.');
+    } finally {
+      this.copyingQr.set(false);
+    }
+  }
+
+  closeImageModal(event: Event) {
+    event.stopPropagation();
+    this.generatedImageUrl.set(null);
+  }
+
+  downloadGeneratedImage(event: Event) {
+    event.stopPropagation();
+    const dataUrl = this.generatedImageUrl();
+    if (!dataUrl) return;
+
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = `loto-ket-qua-${Date.now()}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  private loadImage(url: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+
+      const timeoutId = setTimeout(() => {
+        reject(new Error('Image load timeout'));
+      }, 5000);
+
+      img.onload = () => {
+        clearTimeout(timeoutId);
+        resolve(img);
+      };
+
+      img.onerror = () => {
+        clearTimeout(timeoutId);
+        // Retry without crossOrigin for same-origin images
+        const img2 = new Image();
+        img2.onload = () => resolve(img2);
+        img2.onerror = () => reject(new Error('Failed to load image'));
+        img2.src = url;
+      };
+
+      img.src = url;
     });
   }
 
