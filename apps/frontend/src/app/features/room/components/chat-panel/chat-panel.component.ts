@@ -2,7 +2,7 @@ import { Component, inject, ElementRef, ViewChild, AfterViewChecked, signal, Hos
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { iconoirChatBubble, iconoirSend, iconoirCheck, iconoirTrophy, iconoirEmoji } from '@ng-icons/iconoir';
+import { iconoirChatBubble, iconoirSend, iconoirCheck, iconoirTrophy, iconoirEmoji, iconoirNavArrowDown } from '@ng-icons/iconoir';
 import { ChatService } from '@app/core/services/chat.service';
 import { AuthService } from '@app/core/services/auth.service';
 import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_CATEGORIES, Sticker, getStickerById } from '@loto/shared';
@@ -11,7 +11,7 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
   selector: 'app-chat-panel',
   standalone: true,
   imports: [CommonModule, FormsModule, NgIcon],
-  viewProviders: [provideIcons({ iconoirChatBubble, iconoirSend, iconoirCheck, iconoirTrophy, iconoirEmoji })],
+  viewProviders: [provideIcons({ iconoirChatBubble, iconoirSend, iconoirCheck, iconoirTrophy, iconoirEmoji, iconoirNavArrowDown })],
   template: `
     <div class="chat-panel">
       <div class="messages-container" #messagesContainer (scroll)="onScroll()">
@@ -103,7 +103,12 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
                   }
                   <div class="sticker-content">
                     @if (message.senderId !== currentUserId) {
-                      <span class="sender-name">{{ message.senderName }}</span>
+                      <span class="sender-name">
+                        {{ message.senderName }}
+                        @if (message.senderWinCount && message.senderWinCount > 0) {
+                          <span class="win-count-badge" [ngClass]="'rank-' + getRank(message.senderWinCount)">{{ getRankIcon(message.senderWinCount) }} {{ message.senderWinCount }}</span>
+                        }
+                      </span>
                     }
                     <img [src]="getStickerUrl(message.stickerId)" class="sticker-image" alt="sticker" />
                     <span class="message-time">{{ formatTime(message.timestamp) }}</span>
@@ -121,7 +126,12 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
                 }
                 <div class="message-content">
                   @if (message.senderId !== currentUserId) {
-                    <span class="sender-name">{{ message.senderName }}</span>
+                    <span class="sender-name">
+                      {{ message.senderName }}
+                      @if (message.senderWinCount && message.senderWinCount > 0) {
+                        <span class="win-count-badge" [ngClass]="'rank-' + getRank(message.senderWinCount)">{{ getRankIcon(message.senderWinCount) }} {{ message.senderWinCount }}</span>
+                      }
+                    </span>
                   }
                   <div class="message-bubble">{{ message.content }}</div>
                   <span class="message-time">{{ formatTime(message.timestamp) }}</span>
@@ -131,6 +141,13 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
           }
         }
       </div>
+
+      <!-- Scroll to bottom floating button -->
+      @if (showScrollButton()) {
+        <button class="scroll-to-bottom-btn" (click)="scrollToBottomClick()">
+          <ng-icon name="iconoirNavArrowDown"></ng-icon>
+        </button>
+      }
 
       @if (chatService.typingText()) {
         <div class="typing-indicator">
@@ -202,11 +219,13 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
       flex: 1;
       min-height: 0;
       background: #242526;
+      position: relative;
     }
 
     .messages-container {
       flex: 1;
       overflow-y: auto;
+      overflow-x: hidden;
       padding: 12px;
       display: flex;
       flex-direction: column;
@@ -242,6 +261,7 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
       display: flex;
       gap: 8px;
       max-width: 85%;
+      min-width: 0;
     }
 
     .message.own-message {
@@ -291,17 +311,21 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
       display: flex;
       flex-direction: column;
       gap: 2px;
+      min-width: 0;
+      overflow: hidden;
     }
 
     .sender-name {
-      font-size: 11px;
-      color: #8A8D91;
+      font-size: 12px;
+      font-weight: 500;
+      color: #B0B3B8;
       padding-left: 8px;
-      max-width: 150px;
+      max-width: 200px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      display: block;
+      display: flex;
+      align-items: center;
     }
 
     .message-bubble {
@@ -312,6 +336,9 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
       font-size: 14px;
       line-height: 1.4;
       word-wrap: break-word;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      max-width: 100%;
     }
 
     .own-message .message-bubble {
@@ -847,6 +874,80 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
       border-radius: 3px;
     }
 
+    /* Scroll to bottom button */
+    .scroll-to-bottom-btn {
+      position: absolute;
+      bottom: 80px;
+      right: 16px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #3A3B3C;
+      border: 1px solid #4E4F50;
+      color: #E4E6EB;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      transition: background 0.2s, transform 0.2s;
+      z-index: 50;
+    }
+
+    .scroll-to-bottom-btn:hover {
+      background: #4E4F50;
+      transform: scale(1.1);
+    }
+
+    .scroll-to-bottom-btn:active {
+      transform: scale(0.95);
+    }
+
+    /* Win count badge styles */
+    .win-count-badge {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 1px;
+      vertical-align: middle;
+      margin-left: 4px;
+    }
+    .rank-iron {
+      color: #8A8A8A;
+      background: rgba(138, 138, 138, 0.12);
+      border: 1px solid rgba(138, 138, 138, 0.25);
+    }
+    .rank-bronze {
+      color: #CD7F32;
+      background: rgba(205, 127, 50, 0.12);
+      border: 1px solid rgba(205, 127, 50, 0.25);
+    }
+    .rank-silver {
+      color: #C0C0C0;
+      background: rgba(192, 192, 192, 0.15);
+      border: 1px solid rgba(192, 192, 192, 0.30);
+    }
+    .rank-gold {
+      color: #FFD700;
+      background: rgba(255, 215, 0, 0.12);
+      border: 1px solid rgba(255, 215, 0, 0.25);
+    }
+    .rank-diamond {
+      color: #B9F2FF;
+      background: linear-gradient(135deg, rgba(185, 242, 255, 0.15), rgba(100, 200, 255, 0.08));
+      border: 1px solid rgba(185, 242, 255, 0.35);
+      text-shadow: 0 0 6px rgba(185, 242, 255, 0.6);
+      animation: diamondShimmer 2s ease-in-out infinite;
+    }
+    @keyframes diamondShimmer {
+      0%, 100% { border-color: rgba(185, 242, 255, 0.35); }
+      50% { border-color: rgba(185, 242, 255, 0.7); box-shadow: 0 0 6px rgba(185, 242, 255, 0.25); }
+    }
+
     /* Responsive sticker adjustments */
     @media (max-width: 480px) {
       .sticker-image {
@@ -861,6 +962,14 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
       .sticker-picker {
         max-height: 220px;
       }
+
+      .scroll-to-bottom-btn {
+        bottom: 75px;
+        right: 12px;
+        width: 32px;
+        height: 32px;
+        font-size: 16px;
+      }
     }
   `]
 })
@@ -874,6 +983,9 @@ export class ChatPanelComponent implements AfterViewChecked {
   private shouldScrollToBottom = true;
   private isNearBottom = true;
   private lastMessageCount = 0;
+
+  /** Show scroll-to-bottom button when user scrolls up */
+  showScrollButton = signal(false);
 
   /** Color themes for payment report cards */
   private readonly cardThemes = [
@@ -944,7 +1056,10 @@ export class ChatPanelComponent implements AfterViewChecked {
     if (container) {
       // Check if user is within 100px of bottom
       const threshold = 100;
-      this.isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+      this.isNearBottom = distanceFromBottom < threshold;
+      // Show scroll button when user scrolled up more than threshold
+      this.showScrollButton.set(distanceFromBottom > threshold);
     }
   }
 
@@ -1047,6 +1162,18 @@ export class ChatPanelComponent implements AfterViewChecked {
     }
   }
 
+  /** Manual scroll to bottom (from button click) */
+  scrollToBottomClick(): void {
+    const container = this.messagesContainer?.nativeElement;
+    if (container) {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+    this.showScrollButton.set(false);
+  }
+
   private scrollToBottom(): void {
     try {
       const container = this.messagesContainer?.nativeElement;
@@ -1055,11 +1182,30 @@ export class ChatPanelComponent implements AfterViewChecked {
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             container.scrollTop = container.scrollHeight;
+            this.showScrollButton.set(false);
           });
         });
       }
     } catch (err) {
       // Ignore scroll errors
     }
+  }
+
+  /** Get rank tier based on win count */
+  getRank(winCount: number): string {
+    if (winCount >= 151) return 'diamond';
+    if (winCount >= 61) return 'gold';
+    if (winCount >= 26) return 'silver';
+    if (winCount >= 11) return 'bronze';
+    return 'iron';
+  }
+
+  /** Get rank icon based on win count */
+  getRankIcon(winCount: number): string {
+    if (winCount >= 151) return '\u{1F48E}';  // 💎
+    if (winCount >= 61) return '\u{1F451}';   // 👑
+    if (winCount >= 26) return '\u{26A1}';    // ⚡
+    if (winCount >= 11) return '\u{1F525}';   // 🔥
+    return '\u{2694}\uFE0F';                  // ⚔️
   }
 }

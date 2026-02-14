@@ -24,6 +24,8 @@ export interface ChatMessage {
   senderId: number;
   senderName: string;
   senderAvatar: string | null;
+  /** Sender's total win count for rank badge display */
+  senderWinCount?: number;
   content: string;
   timestamp: Date;
   type: 'text' | 'system' | 'payment_report' | 'sticker';

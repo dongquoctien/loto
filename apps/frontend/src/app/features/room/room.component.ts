@@ -397,6 +397,9 @@ interface SheetInfo {
           <button class="bar-btn" (click)="openSheet('players')">
             <ng-icon name="iconoirGroup" class="bar-icon"></ng-icon>
             <span class="bar-label">{{ players().length }}</span>
+            @if (chatService.hasUnread()) {
+              <span class="unread-badge">{{ chatService.unreadCount() > 99 ? '99+' : chatService.unreadCount() }}</span>
+            }
           </button>
           @if (gameStatus() === 'preparing' && !isOwner() && myTickets().length > 0) {
             <button
@@ -434,7 +437,7 @@ interface SheetInfo {
         </div>
 
         <!-- Player Sheet (mobile) -->
-        <div class="sheet-backdrop" [class.open]="showPlayerSheet()" (click)="showPlayerSheet.set(false)">
+        <div class="sheet-backdrop" [class.open]="showPlayerSheet()" (click)="closePlayerSheet()">
           <div class="sheet-panel" (click)="$event.stopPropagation()">
             <div class="sheet-handle"></div>
             <app-player-list
@@ -444,7 +447,8 @@ interface SheetInfo {
               [penalizedPlayers]="penalizedPlayersSet()"
               [nearWinPlayers]="nearWinPlayers()"
               [kinhClaimantIds]="kinhClaimantUserIds()"
-              [roomStatus]="gameStatus() === 'preparing' ? 'waiting' : 'playing'">
+              [roomStatus]="gameStatus() === 'preparing' ? 'waiting' : 'playing'"
+              [isSheetOpen]="showPlayerSheet()">
             </app-player-list>
           </div>
         </div>
@@ -907,10 +911,18 @@ interface SheetInfo {
       flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
       gap: 3px; background: #3A3B3C; border: none; border-radius: 12px;
       padding: 8px 6px; cursor: pointer; font-family: inherit; min-height: 48px;
+      position: relative;
     }
     .bar-btn:active { background: #4E4F50; }
     .bar-icon { font-size: 18px; line-height: 1; }
     .bar-label { font-size: 11px; color: #B0B3B8; font-weight: 600; }
+    .unread-badge {
+      position: absolute; top: 4px; right: 4px;
+      min-width: 18px; height: 18px; padding: 0 5px;
+      background: #E53935; color: white; font-size: 10px; font-weight: 700;
+      border-radius: 9px; display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
     .bar-kinh { flex: 2; display: flex; align-items: stretch; min-height: 48px; }
     .bar-kinh ::ng-deep app-kinh-button { display: flex; width: 100%; }
     .bar-kinh ::ng-deep .kinh-wrapper { width: 100%; display: flex; align-items: stretch; }
@@ -1065,7 +1077,7 @@ export class RoomComponent implements OnInit, OnDestroy {
   private authService = inject(AuthService);
   private audioService = inject(AudioService);
   youtubePlayerService = inject(YoutubePlayerService);
-  private chatService = inject(ChatService);
+  chatService = inject(ChatService);
 
   // Password dialog state
   showPasswordDialog = signal(false);
@@ -1978,11 +1990,25 @@ export class RoomComponent implements OnInit, OnDestroy {
   openSheet(sheet: 'players' | 'controls') {
     if (sheet === 'players') {
       this.showControlsSheet.set(false);
-      this.showPlayerSheet.set(!this.showPlayerSheet());
+      const isOpening = !this.showPlayerSheet();
+      this.showPlayerSheet.set(isOpening);
+      // When closing player sheet, close chat panel to enable unread counting
+      if (!isOpening) {
+        this.chatService.closePanel();
+      }
     } else {
+      // Close player sheet and chat panel
+      if (this.showPlayerSheet()) {
+        this.chatService.closePanel();
+      }
       this.showPlayerSheet.set(false);
       this.showControlsSheet.set(!this.showControlsSheet());
     }
+  }
+
+  closePlayerSheet() {
+    this.showPlayerSheet.set(false);
+    this.chatService.closePanel();
   }
 
   /**
