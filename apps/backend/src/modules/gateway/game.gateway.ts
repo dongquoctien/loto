@@ -12,9 +12,10 @@ import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { GameService } from '../game/game.service';
 import { RoomService } from '../room/room.service';
+import { ChatService } from '../room/chat.service';
 import { TicketService } from '../ticket/ticket.service';
 import { UserService } from '../user/user.service';
-import { WinType, LineDetails, checkNearWins, TicketData } from '@loto/shared';
+import { WinType, LineDetails, checkNearWins, TicketData, ChatSendPayload, ChatMessagePayload, ChatTypingPayload } from '@loto/shared';
 
 interface AuthenticatedSocket extends Socket {
   userId?: number;
@@ -53,6 +54,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly jwtService: JwtService,
     private readonly gameService: GameService,
     private readonly roomService: RoomService,
+    private readonly chatService: ChatService,
     private readonly ticketService: TicketService,
     private readonly userService: UserService,
   ) {}
@@ -202,6 +204,18 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         userMarkedCells = await this.gameService.getUserMarkedCells(state.sessionId, client.userId);
       }
 
+      // Load recent chat history
+      const recentMessages = await this.chatService.getRecentMessages(room.id, 50);
+      const chatHistory = recentMessages.reverse().map((msg) => ({
+        id: String(msg.id),
+        senderId: msg.senderId,
+        senderName: msg.sender?.displayName || msg.sender?.username || 'Unknown',
+        senderAvatar: msg.sender?.avatarUrl || null,
+        content: msg.content,
+        timestamp: msg.createdAt,
+        type: msg.type,
+      }));
+
       client.emit('room:joined', {
         room: {
           id: room.id,
@@ -231,6 +245,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         session: sessionData,
         purchasedSheets: purchasedSheetsMap,
         markedCells: userMarkedCells,
+        chatHistory,
       });
 
       // If game is paused for kinh, send claims to reconnecting client
@@ -899,6 +914,68 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
       sessionId: session.id,
       sessionNumber: session.sessionNumber,
     });
+  }
+
+  @SubscribeMessage('chat:send')
+  async handleChatSend(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: ChatSendPayload,
+  ) {
+    if (!client.userId || !client.currentRoomId) return;
+
+    try {
+      const user = await this.userService.findById(client.userId);
+      const content = data.content.trim();
+
+      // Save message to database
+      const savedMessage = await this.chatService.saveMessage(
+        client.currentRoomId,
+        client.userId,
+        content,
+        'text',
+      );
+
+      const message: ChatMessagePayload = {
+        id: String(savedMessage.id),
+        senderId: client.userId,
+        senderName: user.displayName || user.username,
+        senderAvatar: user.avatarUrl,
+        content,
+        timestamp: savedMessage.createdAt,
+        type: 'text',
+        roomCode: data.roomCode,
+      };
+
+      // Broadcast to all players in the room
+      this.server.to(`room:${client.currentRoomId}`).emit('chat:message', message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to send message';
+      client.emit('error', { message });
+    }
+  }
+
+  @SubscribeMessage('chat:typing')
+  async handleChatTyping(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: ChatTypingPayload,
+  ) {
+    if (!client.userId || !client.currentRoomId) return;
+
+    try {
+      const user = await this.userService.findById(client.userId);
+
+      // Broadcast typing status to other players in the room (not sender)
+      client.to(`room:${client.currentRoomId}`).emit('chat:typing', {
+        roomCode: data.roomCode,
+        user: {
+          userId: client.userId,
+          displayName: user.displayName || user.username,
+        },
+        isTyping: data.isTyping,
+      });
+    } catch {
+      // Silently ignore typing errors
+    }
   }
 
   private callAndBroadcastNumber(sessionId: number, roomId: number): void {
