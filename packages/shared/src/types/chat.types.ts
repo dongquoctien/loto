@@ -1,3 +1,24 @@
+/** Payment item in a payment report message */
+export interface PaymentReportPayer {
+  userId: number;
+  displayName: string;
+  avatarUrl: string | null;
+  sheetCount: number;
+  amount: number;
+  paid: boolean;
+}
+
+/** Payment report data for payment_report type messages */
+export interface PaymentReportData {
+  winnerId: number;
+  winnerName: string;
+  winnerAvatar: string | null;
+  winnerQrCodeUrl: string | null;
+  winType: 'horizontal' | 'vertical' | 'diagonal';
+  totalAmount: number;
+  payers: PaymentReportPayer[];
+}
+
 export interface ChatMessage {
   id: string;
   senderId: number;
@@ -5,7 +26,9 @@ export interface ChatMessage {
   senderAvatar: string | null;
   content: string;
   timestamp: Date;
-  type: 'text' | 'system';
+  type: 'text' | 'system' | 'payment_report';
+  /** Only present for type='payment_report' */
+  paymentData?: PaymentReportData;
 }
 
 export interface ChatSendPayload {
@@ -31,4 +54,21 @@ export interface ChatTypingBroadcast {
   roomCode: string;
   user: ChatTypingUser;
   isTyping: boolean;
+}
+
+/** Payload for toggling payment status */
+export interface PaymentTogglePaidPayload {
+  roomCode: string;
+  messageId: string;
+  payerUserId: number;
+  paid: boolean;
+}
+
+/** Broadcast when payment status is updated */
+export interface PaymentStatusUpdatedPayload {
+  roomCode: string;
+  messageId: string;
+  payerUserId: number;
+  paid: boolean;
+  updatedBy: number;
 }

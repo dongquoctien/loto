@@ -15,7 +15,7 @@ import { RoomService } from '../room/room.service';
 import { ChatService } from '../room/chat.service';
 import { TicketService } from '../ticket/ticket.service';
 import { UserService } from '../user/user.service';
-import { WinType, LineDetails, checkNearWins, TicketData, ChatSendPayload, ChatMessagePayload, ChatTypingPayload } from '@loto/shared';
+import { WinType, LineDetails, checkNearWins, TicketData, ChatSendPayload, ChatMessagePayload, ChatTypingPayload, PaymentTogglePaidPayload, PaymentReportData } from '@loto/shared';
 
 interface AuthenticatedSocket extends Socket {
   userId?: number;
@@ -214,6 +214,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         content: msg.content,
         timestamp: msg.createdAt,
         type: msg.type,
+        paymentData: msg.paymentData || undefined,
       }));
 
       client.emit('room:joined', {
@@ -978,6 +979,57 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  @SubscribeMessage('payment:toggle-paid')
+  async handlePaymentTogglePaid(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: PaymentTogglePaidPayload,
+  ) {
+    if (!client.userId || !client.currentRoomId) return;
+
+    try {
+      const messageId = parseInt(data.messageId, 10);
+      const message = await this.chatService.findMessageById(messageId);
+
+      if (!message || message.type !== 'payment_report' || !message.paymentData) {
+        client.emit('error', { message: 'Không tìm thấy tin nhắn báo cáo' });
+        return;
+      }
+
+      // Only winner or the specific payer can toggle paid status
+      const isWinner = client.userId === message.paymentData.winnerId;
+      const isPayer = data.payerUserId === client.userId;
+
+      if (!isWinner && !isPayer) {
+        client.emit('error', { message: 'Bạn không có quyền thay đổi trạng thái này' });
+        return;
+      }
+
+      // Update the payment status
+      const updatedMessage = await this.chatService.updatePaymentStatus(
+        messageId,
+        data.payerUserId,
+        data.paid,
+      );
+
+      if (!updatedMessage) {
+        client.emit('error', { message: 'Không thể cập nhật trạng thái thanh toán' });
+        return;
+      }
+
+      // Broadcast the update to all players in the room
+      this.server.to(`room:${client.currentRoomId}`).emit('payment:status-updated', {
+        roomCode: data.roomCode,
+        messageId: data.messageId,
+        payerUserId: data.payerUserId,
+        paid: data.paid,
+        updatedBy: client.userId,
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to toggle payment';
+      client.emit('error', { message });
+    }
+  }
+
   private callAndBroadcastNumber(sessionId: number, roomId: number): void {
     const number = this.gameService.callNextNumber(sessionId);
     if (number === null) {
@@ -1261,6 +1313,45 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
           winnerQrCodeUrl: winner.qrCodeUrl,
         });
       }
+    }
+
+    // Auto-send payment report chat message
+    if (paymentReport.length > 0) {
+      const paymentData: PaymentReportData = {
+        winnerId,
+        winnerName: winner.displayName || winner.username,
+        winnerAvatar: winner.avatarUrl,
+        winnerQrCodeUrl: winner.qrCodeUrl,
+        winType: result.winType as 'horizontal' | 'vertical' | 'diagonal',
+        totalAmount: totalWinAmount,
+        payers: paymentReport.map((p) => ({
+          userId: p.userId,
+          displayName: p.displayName,
+          avatarUrl: p.avatarUrl,
+          sheetCount: p.sheetCount,
+          amount: p.amount,
+          paid: false,
+        })),
+      };
+
+      const savedPaymentMsg = await this.chatService.savePaymentReportMessage(
+        roomId,
+        winnerId,
+        paymentData,
+      );
+
+      // Broadcast to room
+      this.server.to(`room:${roomId}`).emit('chat:message', {
+        id: String(savedPaymentMsg.id),
+        senderId: winnerId,
+        senderName: winner.displayName || winner.username,
+        senderAvatar: winner.avatarUrl,
+        content: '📋 Kết quả Lô Tô',
+        timestamp: savedPaymentMsg.createdAt,
+        type: 'payment_report',
+        paymentData,
+        roomCode: room.roomCode,
+      });
     }
   }
 

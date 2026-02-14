@@ -17,6 +17,7 @@ export enum ClientEvents {
   CHALLENGE_PICK_CARD = 'challenge:pick-card',
   CHAT_SEND = 'chat:send',
   CHAT_TYPING = 'chat:typing',
+  PAYMENT_TOGGLE_PAID = 'payment:toggle-paid',
 }
 
 export enum ServerEvents {
@@ -49,5 +50,6 @@ export enum ServerEvents {
   CHAT_MESSAGE = 'chat:message',
   CHAT_TYPING = 'chat:typing',
   CHAT_HISTORY = 'chat:history',
+  PAYMENT_STATUS_UPDATED = 'payment:status-updated',
   ERROR = 'error',
 }

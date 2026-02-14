@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { RoomEntity } from './room.entity';
 import { UserEntity } from '../../user/user.entity';
+import { PaymentReportData } from '@loto/shared';
 
 @Entity('chat_messages')
 @Index(['roomId', 'createdAt'])
@@ -35,10 +36,13 @@ export class ChatMessageEntity {
 
   @Column({
     type: 'enum',
-    enum: ['text', 'system'],
+    enum: ['text', 'system', 'payment_report'],
     default: 'text',
   })
-  type: 'text' | 'system';
+  type: 'text' | 'system' | 'payment_report';
+
+  @Column({ name: 'payment_data', type: 'json', nullable: true })
+  paymentData: PaymentReportData | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

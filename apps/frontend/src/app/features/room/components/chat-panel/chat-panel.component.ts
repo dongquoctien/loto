@@ -2,16 +2,16 @@ import { Component, inject, ElementRef, ViewChild, AfterViewChecked, signal } fr
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { iconoirChatBubble, iconoirSend } from '@ng-icons/iconoir';
+import { iconoirChatBubble, iconoirSend, iconoirCheck, iconoirTrophy } from '@ng-icons/iconoir';
 import { ChatService } from '@app/core/services/chat.service';
 import { AuthService } from '@app/core/services/auth.service';
-import { ChatMessage } from '@loto/shared';
+import { ChatMessage, PaymentReportData, PaymentReportPayer } from '@loto/shared';
 
 @Component({
   selector: 'app-chat-panel',
   standalone: true,
   imports: [CommonModule, FormsModule, NgIcon],
-  viewProviders: [provideIcons({ iconoirChatBubble, iconoirSend })],
+  viewProviders: [provideIcons({ iconoirChatBubble, iconoirSend, iconoirCheck, iconoirTrophy })],
   template: `
     <div class="chat-panel">
       <div class="messages-container" #messagesContainer (scroll)="onScroll()">
@@ -27,9 +27,69 @@ import { ChatMessage } from '@loto/shared';
               class="message"
               [class.own-message]="message.senderId === currentUserId"
               [class.system-message]="message.type === 'system'"
+              [class.payment-message]="message.type === 'payment_report'"
             >
               @if (message.type === 'system') {
                 <div class="system-content">{{ message.content }}</div>
+              } @else if (message.type === 'payment_report' && message.paymentData) {
+                <div class="payment-report-card" [style]="getCardStyle(message.id)">
+                  <div class="payment-header">
+                    <ng-icon name="iconoirTrophy" class="trophy-icon"></ng-icon>
+                    <span class="winner-label">{{ getWinTypeLabel(message.paymentData.winType) }}</span>
+                  </div>
+
+                  <div class="winner-info">
+                    <div class="winner-avatar">
+                      @if (message.paymentData.winnerAvatar) {
+                        <img [src]="message.paymentData.winnerAvatar" [alt]="message.paymentData.winnerName" />
+                      } @else {
+                        <span>{{ message.paymentData.winnerName?.charAt(0) || '?' }}</span>
+                      }
+                    </div>
+                    <div class="winner-details">
+                      <span class="winner-name">{{ message.paymentData.winnerName }}</span>
+                      <span class="total-amount">+{{ formatCurrency(message.paymentData.totalAmount) }}</span>
+                    </div>
+                  </div>
+
+                  @if (message.paymentData.winnerQrCodeUrl) {
+                    <div class="qr-section">
+                      <img [src]="message.paymentData.winnerQrCodeUrl" alt="QR Code" class="qr-code" />
+                    </div>
+                  }
+
+                  <div class="payers-list">
+                    <div class="payers-header">Danh sách thanh toán</div>
+                    @for (payer of message.paymentData.payers; track payer.userId) {
+                      <div
+                        class="payer-item"
+                        [class.paid]="payer.paid"
+                        [class.clickable]="canTogglePaid(message.paymentData, payer)"
+                        (click)="onTogglePaid(message, payer)"
+                      >
+                        <div class="payer-checkbox">
+                          @if (payer.paid) {
+                            <ng-icon name="iconoirCheck" class="check-icon"></ng-icon>
+                          }
+                        </div>
+                        <div class="payer-avatar">
+                          @if (payer.avatarUrl) {
+                            <img [src]="payer.avatarUrl" [alt]="payer.displayName" />
+                          } @else {
+                            <span>{{ payer.displayName?.charAt(0) || '?' }}</span>
+                          }
+                        </div>
+                        <div class="payer-info">
+                          <span class="payer-name">{{ payer.displayName }}</span>
+                          <span class="payer-sheets">{{ payer.sheetCount }} tờ</span>
+                        </div>
+                        <span class="payer-amount">{{ formatCurrency(payer.amount) }}</span>
+                      </div>
+                    }
+                  </div>
+
+                  <div class="payment-time">{{ formatTime(message.timestamp) }}</div>
+                </div>
               } @else {
                 @if (message.senderId !== currentUserId) {
                   <div class="message-avatar">
@@ -339,6 +399,273 @@ import { ChatMessage } from '@loto/shared';
     .messages-container::-webkit-scrollbar-thumb:hover {
       background: #4E4F50;
     }
+
+    /* Payment Report Styles */
+    .message.payment-message {
+      max-width: 100%;
+      width: 100%;
+    }
+
+    .payment-report-card {
+      background: linear-gradient(135deg, #1a472a 0%, #2d5a3e 100%);
+      border-radius: 12px;
+      padding: 12px;
+      width: 100%;
+      border: 1px solid rgba(76, 175, 80, 0.3);
+    }
+
+    .payment-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .trophy-icon {
+      font-size: 20px;
+      color: #FFD700;
+    }
+
+    .winner-label {
+      font-weight: 600;
+      color: #FFD700;
+      font-size: 14px;
+    }
+
+    .winner-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .winner-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #3A3B3C;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      border: 2px solid #FFD700;
+    }
+
+    .winner-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 50%;
+    }
+
+    .winner-avatar span {
+      color: #FFD700;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .winner-details {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .winner-name {
+      color: #fff;
+      font-weight: 600;
+      font-size: 16px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .total-amount {
+      color: var(--accent-color, #4CAF50);
+      font-weight: 700;
+      font-size: 18px;
+    }
+
+    .qr-section {
+      display: flex;
+      justify-content: center;
+      padding: 12px;
+      background: #fff;
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+
+    .qr-code {
+      max-width: 150px;
+      max-height: 150px;
+      width: 100%;
+      height: auto;
+    }
+
+    .payers-list {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      padding: 8px;
+    }
+
+    .payers-header {
+      font-size: 12px;
+      color: #8A8D91;
+      margin-bottom: 8px;
+      padding-left: 4px;
+    }
+
+    .payer-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      border-radius: 8px;
+      transition: background 0.2s;
+    }
+
+    .payer-item.clickable {
+      cursor: pointer;
+    }
+
+    .payer-item.clickable:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .payer-item.paid {
+      opacity: 0.7;
+    }
+
+    .payer-item.paid .payer-name,
+    .payer-item.paid .payer-amount {
+      text-decoration: line-through;
+    }
+
+    .payer-checkbox {
+      width: 20px;
+      height: 20px;
+      border: 2px solid #65676B;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      background: transparent;
+      transition: all 0.2s;
+    }
+
+    .payer-item.paid .payer-checkbox {
+      background: var(--accent-color, #4CAF50);
+      border-color: var(--accent-color, #4CAF50);
+    }
+
+    .check-icon {
+      font-size: 14px;
+      color: #fff;
+    }
+
+    .payer-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #3A3B3C;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .payer-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 50%;
+    }
+
+    .payer-avatar span {
+      color: #B0B3B8;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .payer-info {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .payer-name {
+      color: #E4E6EB;
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .payer-sheets {
+      font-size: 11px;
+      color: #8A8D91;
+    }
+
+    .payer-amount {
+      color: #E4E6EB;
+      font-size: 13px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .payment-time {
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.5);
+      text-align: right;
+      margin-top: 8px;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 480px) {
+      .payment-report-card {
+        padding: 10px;
+      }
+
+      .winner-avatar {
+        width: 40px;
+        height: 40px;
+      }
+
+      .winner-name {
+        font-size: 14px;
+      }
+
+      .total-amount {
+        font-size: 16px;
+      }
+
+      .qr-code {
+        max-width: 120px;
+        max-height: 120px;
+      }
+
+      .payer-item {
+        padding: 6px;
+      }
+
+      .payer-avatar {
+        width: 24px;
+        height: 24px;
+      }
+
+      .payer-name {
+        font-size: 12px;
+      }
+
+      .payer-amount {
+        font-size: 12px;
+      }
+    }
   `]
 })
 export class ChatPanelComponent implements AfterViewChecked {
@@ -352,8 +679,44 @@ export class ChatPanelComponent implements AfterViewChecked {
   private isNearBottom = true;
   private lastMessageCount = 0;
 
+  /** Color themes for payment report cards */
+  private readonly cardThemes = [
+    { gradient: 'linear-gradient(135deg, #1a472a 0%, #2d5a3e 100%)', border: 'rgba(76, 175, 80, 0.3)', accent: '#4CAF50' },  // Green
+    { gradient: 'linear-gradient(135deg, #1a365d 0%, #2a4a7f 100%)', border: 'rgba(66, 153, 225, 0.3)', accent: '#4299E1' },  // Blue
+    { gradient: 'linear-gradient(135deg, #44337a 0%, #6b46c1 100%)', border: 'rgba(159, 122, 234, 0.3)', accent: '#9F7AEA' },  // Purple
+    { gradient: 'linear-gradient(135deg, #742a2a 0%, #9b2c2c 100%)', border: 'rgba(245, 101, 101, 0.3)', accent: '#F56565' },  // Red
+    { gradient: 'linear-gradient(135deg, #744210 0%, #975a16 100%)', border: 'rgba(237, 137, 54, 0.3)', accent: '#ED8936' },   // Orange
+    { gradient: 'linear-gradient(135deg, #285e61 0%, #319795 100%)', border: 'rgba(56, 178, 172, 0.3)', accent: '#38B2AC' },   // Teal
+    { gradient: 'linear-gradient(135deg, #702459 0%, #97266d 100%)', border: 'rgba(237, 100, 166, 0.3)', accent: '#ED64A6' },  // Pink
+    { gradient: 'linear-gradient(135deg, #1a202c 0%, #2d3748 100%)', border: 'rgba(160, 174, 192, 0.3)', accent: '#A0AEC0' },  // Gray
+  ];
+
+  /** Map to cache card styles per message ID */
+  private cardStyleCache = new Map<string, string>();
+
   get currentUserId(): number | null {
     return this.authService.user()?.id ?? null;
+  }
+
+  /** Get card style based on message ID (consistent color per message) */
+  getCardStyle(messageId: string): string {
+    // Return cached style if exists
+    if (this.cardStyleCache.has(messageId)) {
+      return this.cardStyleCache.get(messageId)!;
+    }
+
+    // Generate consistent index from message ID
+    let hash = 0;
+    for (let i = 0; i < messageId.length; i++) {
+      hash = (hash << 5) - hash + messageId.charCodeAt(i);
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    const index = Math.abs(hash) % this.cardThemes.length;
+    const theme = this.cardThemes[index];
+
+    const style = `background: ${theme.gradient}; border-color: ${theme.border}; --accent-color: ${theme.accent}`;
+    this.cardStyleCache.set(messageId, style);
+    return style;
   }
 
   ngAfterViewChecked(): void {
@@ -402,6 +765,43 @@ export class ChatPanelComponent implements AfterViewChecked {
   formatTime(timestamp: Date | string): string {
     const date = new Date(timestamp);
     return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  formatCurrency(amount: number): string {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND',
+      maximumFractionDigits: 0,
+    }).format(amount);
+  }
+
+  getWinTypeLabel(winType: string): string {
+    switch (winType) {
+      case 'horizontal':
+        return '🎉 Kinh Ngang';
+      case 'vertical':
+        return '🎉 Kinh Dọc';
+      case 'diagonal':
+        return '🎉 Kinh Chéo';
+      default:
+        return '🎉 Kinh';
+    }
+  }
+
+  canTogglePaid(paymentData: PaymentReportData, payer: PaymentReportPayer): boolean {
+    // Winner can toggle any payer, payer can toggle themselves
+    return (
+      this.currentUserId === paymentData.winnerId ||
+      this.currentUserId === payer.userId
+    );
+  }
+
+  onTogglePaid(message: ChatMessage, payer: PaymentReportPayer): void {
+    if (!message.paymentData || !this.canTogglePaid(message.paymentData, payer)) {
+      return;
+    }
+
+    this.chatService.togglePaymentPaid(message.id, payer.userId, !payer.paid);
   }
 
   private scrollToBottom(): void {

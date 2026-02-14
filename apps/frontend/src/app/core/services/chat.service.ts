@@ -1,7 +1,7 @@
 import { Injectable, OnDestroy, signal, computed } from '@angular/core';
 import { Subject, takeUntil, debounceTime } from 'rxjs';
 import { SocketService } from './socket.service';
-import { ClientEvents, ServerEvents, ChatMessage, ChatMessagePayload, ChatTypingBroadcast, ChatTypingUser } from '@loto/shared';
+import { ClientEvents, ServerEvents, ChatMessage, ChatMessagePayload, ChatTypingBroadcast, ChatTypingUser, PaymentStatusUpdatedPayload } from '@loto/shared';
 
 @Injectable({ providedIn: 'root' })
 export class ChatService implements OnDestroy {
@@ -78,6 +78,34 @@ export class ChatService implements OnDestroy {
           }
           return filtered;
         });
+      });
+
+    // Listen for payment status updates
+    this.socketService
+      .on<PaymentStatusUpdatedPayload>(ServerEvents.PAYMENT_STATUS_UPDATED)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((data) => {
+        if (data.roomCode !== this.currentRoomCode) return;
+
+        // Update the payment status in the corresponding message
+        this.messagesSignal.update((msgs) =>
+          msgs.map((msg) => {
+            if (msg.id === data.messageId && msg.paymentData) {
+              return {
+                ...msg,
+                paymentData: {
+                  ...msg.paymentData,
+                  payers: msg.paymentData.payers.map((payer) =>
+                    payer.userId === data.payerUserId
+                      ? { ...payer, paid: data.paid }
+                      : payer
+                  ),
+                },
+              };
+            }
+            return msg;
+          })
+        );
       });
   }
 
@@ -185,6 +213,18 @@ export class ChatService implements OnDestroy {
       type: 'system',
     };
     this.messagesSignal.update((msgs) => [...msgs, systemMessage]);
+  }
+
+  /** Toggle payment paid status */
+  togglePaymentPaid(messageId: string, payerUserId: number, paid: boolean): void {
+    if (!this.currentRoomCode) return;
+
+    this.socketService.emit(ClientEvents.PAYMENT_TOGGLE_PAID, {
+      roomCode: this.currentRoomCode,
+      messageId,
+      payerUserId,
+      paid,
+    });
   }
 
   ngOnDestroy(): void {
