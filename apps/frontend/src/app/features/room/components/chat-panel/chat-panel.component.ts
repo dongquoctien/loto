@@ -230,6 +230,7 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
       display: flex;
       flex-direction: column;
       gap: 8px;
+      min-height: 300px;
     }
 
     .no-messages {
@@ -406,6 +407,7 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
       padding: 12px;
       border-top: 1px solid #3A3B3C;
       background: #242526;
+      flex-shrink: 0;
     }
 
     .input-area input {
@@ -969,6 +971,13 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
         width: 32px;
         height: 32px;
         font-size: 16px;
+      }
+    }
+
+    /* iOS/iPadOS detection - limit height for devices with home indicator */
+    @supports (-webkit-touch-callout: none) {
+      .chat-panel {
+        max-height: 70vh;
       }
     }
   `]

@@ -886,7 +886,7 @@ interface SheetInfo {
       background: #242526; border-radius: 16px 16px 0 0;
       max-height: 75vh; overflow: hidden;
       transform: translateY(100%); transition: transform 0.3s ease-out;
-      padding: 12px 16px calc(24px + 68px);
+      padding: 12px 16px calc(24px + 68px + env(safe-area-inset-bottom, 0px));
       display: flex;
       flex-direction: column;
     }
