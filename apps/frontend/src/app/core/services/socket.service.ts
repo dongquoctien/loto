@@ -72,6 +72,12 @@ export class SocketService implements OnDestroy {
 
     this.socket.on('connect_error', (error) => {
       console.error('Socket connection error:', error.message);
+
+      // Check if error is due to authentication failure (token expired/invalid)
+      if (error.message?.includes('jwt') || error.message?.includes('unauthorized') || error.message?.includes('token')) {
+        alert('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại');
+        this.authService.logout();
+      }
     });
   }
 

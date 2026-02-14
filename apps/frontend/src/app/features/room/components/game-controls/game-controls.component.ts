@@ -80,10 +80,10 @@ import { KinhVerifyClaimItem } from '@loto/shared';
                 @if (kinhClaims.length < 2) {
                   <div class="claim-verify-actions">
                     <button class="btn btn-approve" (click)="approveKinh.emit(claim.userId)">
-                      OK
+                      Vé đúng
                     </button>
                     <button class="btn btn-reject" (click)="rejectKinh.emit(claim.userId)">
-                      Sai
+                      Vé sai
                     </button>
                   </div>
                 }
