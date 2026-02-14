@@ -36,13 +36,16 @@ export class ChatMessageEntity {
 
   @Column({
     type: 'enum',
-    enum: ['text', 'system', 'payment_report'],
+    enum: ['text', 'system', 'payment_report', 'sticker'],
     default: 'text',
   })
-  type: 'text' | 'system' | 'payment_report';
+  type: 'text' | 'system' | 'payment_report' | 'sticker';
 
   @Column({ name: 'payment_data', type: 'json', nullable: true })
   paymentData: PaymentReportData | null;
+
+  @Column({ name: 'sticker_id', type: 'varchar', length: 50, nullable: true })
+  stickerId: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

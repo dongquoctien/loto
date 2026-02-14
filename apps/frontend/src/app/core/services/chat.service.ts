@@ -149,6 +149,21 @@ export class ChatService implements OnDestroy {
     });
   }
 
+  /** Send a sticker to the current room */
+  sendSticker(stickerId: string): void {
+    if (!this.currentRoomCode || !stickerId) return;
+
+    // Stop typing indicator when sending sticker
+    this.sendTypingStatus(false);
+    this.clearTypingTimeout();
+
+    this.socketService.emit(ClientEvents.CHAT_SEND, {
+      roomCode: this.currentRoomCode,
+      content: '',
+      stickerId,
+    });
+  }
+
   /** Called when user is typing */
   onTyping(): void {
     if (!this.currentRoomCode) return;

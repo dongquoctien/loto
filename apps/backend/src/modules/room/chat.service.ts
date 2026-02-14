@@ -41,6 +41,21 @@ export class ChatService {
     return this.chatMessageRepository.save(message);
   }
 
+  async saveStickerMessage(
+    roomId: number,
+    senderId: number,
+    stickerId: string,
+  ): Promise<ChatMessageEntity> {
+    const message = this.chatMessageRepository.create({
+      roomId,
+      senderId,
+      content: '',
+      type: 'sticker',
+      stickerId,
+    });
+    return this.chatMessageRepository.save(message);
+  }
+
   async getRecentMessages(roomId: number, limit = 50): Promise<ChatMessageEntity[]> {
     return this.chatMessageRepository.find({
       where: { roomId },

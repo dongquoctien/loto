@@ -15,7 +15,7 @@ import { RoomService } from '../room/room.service';
 import { ChatService } from '../room/chat.service';
 import { TicketService } from '../ticket/ticket.service';
 import { UserService } from '../user/user.service';
-import { WinType, LineDetails, checkNearWins, TicketData, ChatSendPayload, ChatMessagePayload, ChatTypingPayload, PaymentTogglePaidPayload, PaymentReportData } from '@loto/shared';
+import { WinType, LineDetails, checkNearWins, TicketData, ChatSendPayload, ChatMessagePayload, ChatTypingPayload, PaymentTogglePaidPayload, PaymentReportData, getStickerById } from '@loto/shared';
 
 interface AuthenticatedSocket extends Socket {
   userId?: number;
@@ -215,6 +215,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         timestamp: msg.createdAt,
         type: msg.type,
         paymentData: msg.paymentData || undefined,
+        stickerId: msg.stickerId || undefined,
       }));
 
       client.emit('room:joined', {
@@ -926,7 +927,41 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     try {
       const user = await this.userService.findById(client.userId);
+
+      // Check if it's a sticker message
+      if (data.stickerId) {
+        const sticker = getStickerById(data.stickerId);
+        if (!sticker) {
+          client.emit('error', { message: 'Sticker không tồn tại' });
+          return;
+        }
+
+        // Save sticker message to database
+        const savedMessage = await this.chatService.saveStickerMessage(
+          client.currentRoomId,
+          client.userId,
+          data.stickerId,
+        );
+
+        const message: ChatMessagePayload = {
+          id: String(savedMessage.id),
+          senderId: client.userId,
+          senderName: user.displayName || user.username,
+          senderAvatar: user.avatarUrl,
+          content: '',
+          timestamp: savedMessage.createdAt,
+          type: 'sticker',
+          stickerId: data.stickerId,
+          roomCode: data.roomCode,
+        };
+
+        this.server.to(`room:${client.currentRoomId}`).emit('chat:message', message);
+        return;
+      }
+
+      // Regular text message
       const content = data.content.trim();
+      if (!content) return;
 
       // Save message to database
       const savedMessage = await this.chatService.saveMessage(

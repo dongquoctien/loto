@@ -6,6 +6,9 @@ export * from './types/game.types';
 export * from './types/socket-events.types';
 export * from './types/chat.types';
 
+// Stickers
+export * from './stickers';
+
 // Constants
 export * from './constants/colors';
 export * from './constants/sheet-mapping';

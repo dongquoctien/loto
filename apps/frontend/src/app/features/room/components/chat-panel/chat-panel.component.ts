@@ -1,17 +1,17 @@
-import { Component, inject, ElementRef, ViewChild, AfterViewChecked, signal } from '@angular/core';
+import { Component, inject, ElementRef, ViewChild, AfterViewChecked, signal, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { iconoirChatBubble, iconoirSend, iconoirCheck, iconoirTrophy } from '@ng-icons/iconoir';
+import { iconoirChatBubble, iconoirSend, iconoirCheck, iconoirTrophy, iconoirEmoji } from '@ng-icons/iconoir';
 import { ChatService } from '@app/core/services/chat.service';
 import { AuthService } from '@app/core/services/auth.service';
-import { ChatMessage, PaymentReportData, PaymentReportPayer } from '@loto/shared';
+import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_CATEGORIES, Sticker, getStickerById } from '@loto/shared';
 
 @Component({
   selector: 'app-chat-panel',
   standalone: true,
   imports: [CommonModule, FormsModule, NgIcon],
-  viewProviders: [provideIcons({ iconoirChatBubble, iconoirSend, iconoirCheck, iconoirTrophy })],
+  viewProviders: [provideIcons({ iconoirChatBubble, iconoirSend, iconoirCheck, iconoirTrophy, iconoirEmoji })],
   template: `
     <div class="chat-panel">
       <div class="messages-container" #messagesContainer (scroll)="onScroll()">
@@ -90,6 +90,25 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer } from '@loto/shared
 
                   <div class="payment-time">{{ formatTime(message.timestamp) }}</div>
                 </div>
+              } @else if (message.type === 'sticker' && message.stickerId) {
+                <div class="sticker-message" [class.own-sticker]="message.senderId === currentUserId">
+                  @if (message.senderId !== currentUserId) {
+                    <div class="message-avatar">
+                      @if (message.senderAvatar) {
+                        <img [src]="message.senderAvatar" [alt]="message.senderName" />
+                      } @else {
+                        <span>{{ message.senderName?.charAt(0) || '?' }}</span>
+                      }
+                    </div>
+                  }
+                  <div class="sticker-content">
+                    @if (message.senderId !== currentUserId) {
+                      <span class="sender-name">{{ message.senderName }}</span>
+                    }
+                    <img [src]="getStickerUrl(message.stickerId)" class="sticker-image" alt="sticker" />
+                    <span class="message-time">{{ formatTime(message.timestamp) }}</span>
+                  </div>
+                </div>
               } @else {
                 @if (message.senderId !== currentUserId) {
                   <div class="message-avatar">
@@ -124,7 +143,34 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer } from '@loto/shared
         </div>
       }
 
+      <!-- Sticker Picker Panel -->
+      @if (showStickerPicker()) {
+        <div class="sticker-picker" (click)="$event.stopPropagation()">
+          <div class="sticker-categories">
+            @for (cat of stickerCategories; track cat.id) {
+              <button
+                class="category-btn"
+                [class.active]="selectedCategory() === cat.id"
+                (click)="selectCategory(cat.id)"
+              >
+                {{ cat.icon }}
+              </button>
+            }
+          </div>
+          <div class="sticker-grid">
+            @for (sticker of filteredStickers(); track sticker.id) {
+              <button class="sticker-item" (click)="sendSticker(sticker.id)">
+                <img [src]="sticker.url" [alt]="sticker.id" loading="lazy" />
+              </button>
+            }
+          </div>
+        </div>
+      }
+
       <form class="input-area" (submit)="sendMessage($event)">
+        <button type="button" class="sticker-btn" (click)="toggleStickerPicker($event)">
+          <ng-icon name="iconoirEmoji"></ng-icon>
+        </button>
         <input
           type="text"
           [(ngModel)]="newMessage"
@@ -134,6 +180,7 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer } from '@loto/shared
           maxlength="500"
           (input)="onTyping()"
           (blur)="onStopTyping()"
+          (focus)="closeStickerPicker()"
         />
         <button type="submit" [disabled]="!newMessage.trim()">
           <ng-icon name="iconoirSend"></ng-icon>
@@ -666,6 +713,155 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer } from '@loto/shared
         font-size: 12px;
       }
     }
+
+    /* Sticker Message Styles */
+    .sticker-message {
+      display: flex;
+      gap: 8px;
+    }
+
+    .sticker-message.own-sticker {
+      flex-direction: row-reverse;
+    }
+
+    .sticker-content {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .sticker-message.own-sticker .sticker-content {
+      align-items: flex-end;
+    }
+
+    .sticker-image {
+      width: 120px;
+      height: 120px;
+      object-fit: contain;
+      border-radius: 8px;
+    }
+
+    /* Sticker Picker Styles */
+    .sticker-picker {
+      position: absolute;
+      bottom: 70px;
+      left: 12px;
+      right: 12px;
+      background: #2D2E2F;
+      border-radius: 12px;
+      border: 1px solid #3A3B3C;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      z-index: 100;
+      max-height: 280px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sticker-categories {
+      display: flex;
+      gap: 4px;
+      padding: 8px;
+      border-bottom: 1px solid #3A3B3C;
+    }
+
+    .category-btn {
+      padding: 6px 12px;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background 0.2s;
+    }
+
+    .category-btn:hover {
+      background: #3A3B3C;
+    }
+
+    .category-btn.active {
+      background: #1877F2;
+    }
+
+    .sticker-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      padding: 8px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .sticker-item {
+      aspect-ratio: 1;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      padding: 4px;
+      transition: background 0.2s, transform 0.1s;
+    }
+
+    .sticker-item:hover {
+      background: #3A3B3C;
+      transform: scale(1.05);
+    }
+
+    .sticker-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .sticker-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: transparent;
+      border: none;
+      color: #8A8D91;
+      font-size: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.2s, background 0.2s;
+      flex-shrink: 0;
+    }
+
+    .sticker-btn:hover {
+      color: #E4E6EB;
+      background: #3A3B3C;
+    }
+
+    /* Sticker picker scrollbar */
+    .sticker-grid::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .sticker-grid::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .sticker-grid::-webkit-scrollbar-thumb {
+      background: #3A3B3C;
+      border-radius: 3px;
+    }
+
+    /* Responsive sticker adjustments */
+    @media (max-width: 480px) {
+      .sticker-image {
+        width: 100px;
+        height: 100px;
+      }
+
+      .sticker-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .sticker-picker {
+        max-height: 220px;
+      }
+    }
   `]
 })
 export class ChatPanelComponent implements AfterViewChecked {
@@ -693,6 +889,14 @@ export class ChatPanelComponent implements AfterViewChecked {
 
   /** Map to cache card styles per message ID */
   private cardStyleCache = new Map<string, string>();
+
+  /** Sticker picker state */
+  showStickerPicker = signal(false);
+  selectedCategory = signal<string>('working');
+  stickerCategories = STICKER_CATEGORIES;
+
+  /** Filtered stickers based on selected category */
+  filteredStickers = signal<Sticker[]>(STICKERS.filter(s => s.category === 'working'));
 
   get currentUserId(): number | null {
     return this.authService.user()?.id ?? null;
@@ -804,11 +1008,55 @@ export class ChatPanelComponent implements AfterViewChecked {
     this.chatService.togglePaymentPaid(message.id, payer.userId, !payer.paid);
   }
 
+  /** Toggle sticker picker visibility */
+  toggleStickerPicker(event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.showStickerPicker.update(v => !v);
+  }
+
+  /** Close sticker picker */
+  closeStickerPicker(): void {
+    this.showStickerPicker.set(false);
+  }
+
+  /** Select sticker category */
+  selectCategory(categoryId: string): void {
+    this.selectedCategory.set(categoryId);
+    this.filteredStickers.set(STICKERS.filter(s => s.category === categoryId));
+  }
+
+  /** Send a sticker */
+  sendSticker(stickerId: string): void {
+    this.chatService.sendSticker(stickerId);
+    this.showStickerPicker.set(false);
+    this.shouldScrollToBottom = true;
+  }
+
+  /** Get sticker URL by ID */
+  getStickerUrl(stickerId: string): string {
+    const sticker = getStickerById(stickerId);
+    return sticker?.url || '';
+  }
+
+  /** Close sticker picker when clicking outside */
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: Event): void {
+    if (this.showStickerPicker()) {
+      this.closeStickerPicker();
+    }
+  }
+
   private scrollToBottom(): void {
     try {
       const container = this.messagesContainer?.nativeElement;
       if (container) {
-        container.scrollTop = container.scrollHeight;
+        // Use double requestAnimationFrame to ensure DOM is fully rendered and painted
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            container.scrollTop = container.scrollHeight;
+          });
+        });
       }
     } catch (err) {
       // Ignore scroll errors

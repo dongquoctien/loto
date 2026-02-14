@@ -26,14 +26,18 @@ export interface ChatMessage {
   senderAvatar: string | null;
   content: string;
   timestamp: Date;
-  type: 'text' | 'system' | 'payment_report';
+  type: 'text' | 'system' | 'payment_report' | 'sticker';
   /** Only present for type='payment_report' */
   paymentData?: PaymentReportData;
+  /** Only present for type='sticker' - contains sticker ID */
+  stickerId?: string;
 }
 
 export interface ChatSendPayload {
   roomCode: string;
   content: string;
+  /** Optional sticker ID - if provided, sends a sticker message */
+  stickerId?: string;
 }
 
 export interface ChatMessagePayload extends ChatMessage {
