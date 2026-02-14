@@ -880,7 +880,7 @@ interface SheetInfo {
     .sheet-panel {
       position: absolute; bottom: 0; left: 0; right: 0;
       background: #242526; border-radius: 16px 16px 0 0;
-      max-height: 70vh; overflow: hidden;
+      max-height: 75vh; overflow: hidden;
       transform: translateY(100%); transition: transform 0.3s ease-out;
       padding: 12px 16px calc(24px + 68px);
       display: flex;
