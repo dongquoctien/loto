@@ -113,8 +113,8 @@ import { KinhVerifyClaimItem } from '@loto/shared';
       background: #242526;
       padding: 16px;
       border-radius: 8px;
-      margin-top: 16px;
-      border: 1px solid #3A3B3C;
+      // margin-top: 16px;
+      // border: 1px solid #3A3B3C;
     }
     .controls-panel h3 {
       margin: 0 0 12px;

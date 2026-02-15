@@ -15,7 +15,8 @@ import { RoomService } from '../room/room.service';
 import { ChatService } from '../room/chat.service';
 import { TicketService } from '../ticket/ticket.service';
 import { UserService } from '../user/user.service';
-import { WinType, LineDetails, checkNearWins, TicketData, ChatSendPayload, ChatMessagePayload, ChatTypingPayload, PaymentTogglePaidPayload, PaymentReportData, getStickerById } from '@loto/shared';
+import { WinType, LineDetails, checkNearWins, TicketData, ChatSendPayload, ChatMessagePayload, ChatTypingPayload, PaymentTogglePaidPayload, PaymentReportData } from '@loto/shared';
+import { StickerService } from '../sticker/sticker.service';
 
 interface AuthenticatedSocket extends Socket {
   userId?: number;
@@ -57,6 +58,7 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly chatService: ChatService,
     private readonly ticketService: TicketService,
     private readonly userService: UserService,
+    private readonly stickerService: StickerService,
   ) {}
 
   /** Broadcast room creation to all connected clients (for lobby updates) */
@@ -931,8 +933,9 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       // Check if it's a sticker message
       if (data.stickerId) {
-        const sticker = getStickerById(data.stickerId);
-        if (!sticker) {
+        // Check sticker exists in database (supports both DB stickers and legacy hardcoded stickers)
+        const sticker = await this.stickerService.getByStickerId(data.stickerId);
+        if (!sticker || !sticker.isActive) {
           client.emit('error', { message: 'Sticker không tồn tại' });
           return;
         }

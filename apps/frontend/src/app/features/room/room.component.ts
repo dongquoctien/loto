@@ -23,6 +23,8 @@ import {
   iconoirFlash,
   iconoirStatsUpSquare,
   iconoirLogOut,
+  iconoirExpand,
+  iconoirCollapse,
 } from '@ng-icons/iconoir';
 import { SocketService } from '../../core/services/socket.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -124,6 +126,8 @@ interface SheetInfo {
       iconoirFlash,
       iconoirStatsUpSquare,
       iconoirLogOut,
+      iconoirExpand,
+      iconoirCollapse,
     }),
   ],
   template: `
@@ -256,10 +260,10 @@ interface SheetInfo {
             <!-- My Sheets (grouped tickets) -->
             @if (mySheets().length > 0) {
               <div class="my-sheets">
-                <div class="sheets-header">
+                <!-- <div class="sheets-header">
                   <h3>Tờ Của Bạn</h3>
-                </div>
-                <div class="sheets-grid">
+                </div> -->
+                <div class="sheets-grid" [class.single-sheet]="mySheets().length === 1" [class.two-sheets]="mySheets().length === 2">
                   @for (sheet of mySheets(); track sheet.id) {
                     <app-sheet-display
                       [sheet]="sheet"
@@ -353,7 +357,7 @@ interface SheetInfo {
           </div>
 
           <!-- Desktop Sidebar (Controls + Ready + Player List) -->
-          <div class="desktop-sidebar">
+          <div class="desktop-sidebar" [class.expanded]="sidebarExpanded()">
             <!-- Owner Controls -->
             @if (isOwner()) {
               <div class="inline-controls">
@@ -395,7 +399,10 @@ interface SheetInfo {
             }
 
             <!-- Player List -->
-            <div class="desktop-player-list">
+            <div class="desktop-player-list" [class.expanded]="sidebarExpanded()">
+              <button class="sidebar-expand-toggle" (click)="sidebarExpanded.set(!sidebarExpanded())" [title]="sidebarExpanded() ? 'Thu nhỏ' : 'Mở rộng'">
+                <ng-icon [name]="sidebarExpanded() ? 'iconoirCollapse' : 'iconoirExpand'" class="expand-icon"></ng-icon>
+              </button>
               <app-player-list
                 [players]="playersWithSheetCounts()"
                 [ownerId]="room()?.ownerId ?? null"
@@ -796,16 +803,100 @@ interface SheetInfo {
     .tickets-grid { display: grid; gap: 12px; }
 
     /* Sheets display */
-    .my-sheets { margin-bottom: 16px; }
-    .sheets-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .my-sheets { margin-bottom: 16px; flex: 1; display: flex; flex-direction: column; }
+    .sheets-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-shrink: 0; }
     .sheets-header h3 { margin: 0; font-size: 16px; color: #E4E6EB; }
     .sheets-grid {
       display: grid;
       gap: 16px;
       grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      flex: 1;
+      align-content: start;
     }
+
+    /* Single sheet - maximize space on PC */
+    .sheets-grid.single-sheet {
+      grid-template-columns: 1fr;
+      justify-items: center;
+      align-content: center;
+    }
+    .sheets-grid.single-sheet app-sheet-display {
+      width: 100%;
+      max-width: 900px;
+    }
+    .sheets-grid.single-sheet ::ng-deep .sheet {
+      max-width: 100% !important;
+    }
+    .sheets-grid.single-sheet ::ng-deep .cell {
+      height: 56px;
+    }
+    .sheets-grid.single-sheet ::ng-deep .cell-num {
+      font-size: 22px;
+      font-weight: 600;
+    }
+    .sheets-grid.single-sheet ::ng-deep .sheet-title {
+      font-size: 24px;
+      padding: 12px 16px;
+    }
+    .sheets-grid.single-sheet ::ng-deep .ticket-number-badge {
+      width: 30px;
+      height: 30px;
+      font-size: 16px;
+    }
+    .sheets-grid.single-sheet ::ng-deep .ticket-section {
+      padding-left: 40px;
+    }
+    .sheets-grid.single-sheet ::ng-deep .ticket-row {
+      gap: 4px;
+    }
+
+    /* Two sheets - side by side, maximize height */
+    .sheets-grid.two-sheets {
+      grid-template-columns: repeat(2, 1fr);
+      align-content: center;
+      gap: 24px;
+    }
+    .sheets-grid.two-sheets ::ng-deep .sheet {
+      max-width: 100% !important;
+    }
+    .sheets-grid.two-sheets ::ng-deep .cell {
+      height: 44px;
+    }
+    .sheets-grid.two-sheets ::ng-deep .cell-num {
+      font-size: 17px;
+      font-weight: 500;
+    }
+    .sheets-grid.two-sheets ::ng-deep .sheet-title {
+      font-size: 18px;
+    }
+
+    @media (max-width: 1400px) {
+      .sheets-grid.single-sheet ::ng-deep .cell { height: 48px; }
+      .sheets-grid.single-sheet ::ng-deep .cell-num { font-size: 18px; }
+      .sheets-grid.two-sheets ::ng-deep .cell { height: 38px; }
+      .sheets-grid.two-sheets ::ng-deep .cell-num { font-size: 15px; }
+    }
+
+    @media (max-width: 1200px) {
+      .sheets-grid.two-sheets {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Tablet landscape with 1 sheet - maximize display */
+    @media (min-width: 768px) and (max-width: 1024px) and (orientation: landscape) {
+      .sheets-grid.single-sheet ::ng-deep .cell { height: 44px; }
+      .sheets-grid.single-sheet ::ng-deep .cell-num { font-size: 18px; }
+      .sheets-grid.single-sheet app-sheet-display { max-width: 700px; }
+    }
+
     @media (max-width: 640px) {
       .sheets-grid { grid-template-columns: 1fr; gap: 12px; }
+      .sheets-grid.single-sheet ::ng-deep .cell { height: 32px; }
+      .sheets-grid.single-sheet ::ng-deep .cell-num { font-size: 14px; font-weight: 500; }
+      .sheets-grid.single-sheet ::ng-deep .sheet-title { font-size: 14px; padding: 8px 12px; }
+      .sheets-grid.single-sheet ::ng-deep .ticket-number-badge { width: 20px; height: 20px; font-size: 11px; }
+      .sheets-grid.single-sheet ::ng-deep .ticket-section { padding-left: 28px; }
     }
 
     .penalty-notice {
@@ -1118,7 +1209,7 @@ interface SheetInfo {
       .inline-controls {
         background: #242526;
         border-radius: 12px;
-        padding: 16px;
+        // padding: 16px;
         box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         flex-shrink: 0;
       }
@@ -1132,12 +1223,49 @@ interface SheetInfo {
         box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         display: flex;
         flex-direction: column;
+        position: relative;
       }
       .desktop-player-list app-player-list {
         flex: 1;
         min-height: 0;
         display: flex;
         flex-direction: column;
+      }
+      /* Sidebar expand toggle button - top right corner */
+      .sidebar-expand-toggle {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        background: rgba(58, 59, 60, 0.9);
+        border: none;
+        border-radius: 6px;
+        color: #B0B3B8;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .sidebar-expand-toggle:hover {
+        background: #4E4F50;
+        color: #E4E6EB;
+      }
+      .sidebar-expand-toggle .expand-icon {
+        font-size: 16px;
+      }
+      /* Expanded state - hide controls panel */
+      .desktop-sidebar.expanded .inline-controls,
+      .desktop-sidebar.expanded .sidebar-ready-section {
+        display: none;
+      }
+      .desktop-player-list.expanded {
+        flex: 1;
+        height: auto;
+        max-height: none;
       }
       .sidebar-ready-section {
         display: block;
@@ -1237,6 +1365,9 @@ export class RoomComponent implements OnInit, OnDestroy {
   copiedRoomCode = signal(false);
   showPlayerSheet = signal(false);
   showControlsSheet = signal(false);
+
+  // Sidebar expanded state (desktop/tablet)
+  sidebarExpanded = signal(false);
 
   // Kinh alert popup for owner
   showKinhAlert = signal(false);
