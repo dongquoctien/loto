@@ -35,6 +35,15 @@ export class UserEntity {
   @Column({ name: 'win_count', default: 0 })
   winCount: number;
 
+  @Column({ type: 'enum', enum: ['user', 'admin'], default: 'user' })
+  role: 'user' | 'admin';
+
+  @Column({ name: 'is_banned', default: false })
+  isBanned: boolean;
+
+  @Column({ name: 'banned_at', type: 'timestamp', nullable: true })
+  bannedAt: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

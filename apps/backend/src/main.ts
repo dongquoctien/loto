@@ -15,11 +15,15 @@ async function bootstrap() {
 
   // Serve uploaded files statically at /uploads with CORS
   const uploadDir = configService.get<string>('UPLOAD_DIR', './uploads');
-  const corsOrigin = configService.get<string>('CORS_ORIGIN', 'http://localhost:4200');
+  const allowedOrigins = configService
+    .get<string>('CORS_ORIGIN', 'http://localhost:4200')
+    .split(',')
+    .map((o) => o.trim());
   app.useStaticAssets(join(process.cwd(), uploadDir), {
     prefix: '/uploads/',
-    setHeaders: (res) => {
-      res.setHeader('Access-Control-Allow-Origin', corsOrigin);
+    setHeaders: (res, _path, _stat) => {
+      // For static assets, use wildcard or first origin (browser handles CORS differently for static)
+      res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     },
   });
@@ -32,8 +36,12 @@ async function bootstrap() {
     }),
   );
 
+  const corsOrigins = configService
+    .get<string>('CORS_ORIGIN', 'http://localhost:4200')
+    .split(',')
+    .map((o) => o.trim());
   app.enableCors({
-    origin: configService.get<string>('CORS_ORIGIN', 'http://localhost:4200'),
+    origin: corsOrigins.length === 1 ? corsOrigins[0] : corsOrigins,
     credentials: true,
   });
 

@@ -7,7 +7,18 @@ export interface Sticker {
   id: string;
   url: string;
   category: 'working' | 'emotion' | 'action';
+  name?: string;
 }
+
+/**
+ * Placeholder sticker for when a sticker is not found (deleted/inactive)
+ */
+export const PLACEHOLDER_STICKER: Sticker = {
+  id: 'placeholder',
+  url: '/assets/sticker-unavailable.jpg',
+  category: 'emotion',
+  name: 'Không khả dụng',
+};
 
 export const STICKERS: Sticker[] = [
   // Working stickers - Row 1
@@ -89,9 +100,14 @@ export const STICKERS: Sticker[] = [
   { id: 'cute_10', url: 'https://github.com/Anmol-Baranwal/Cool-GIFs-For-GitHub/assets/74038190/02d5a390-b263-43a4-981c-fbdc18c8b902', category: 'emotion' },
 ];
 
-/** Get sticker by ID */
+/** Get sticker by ID - returns undefined if not found */
 export function getStickerById(id: string): Sticker | undefined {
   return STICKERS.find(s => s.id === id);
+}
+
+/** Get sticker by ID with placeholder fallback */
+export function getStickerByIdOrPlaceholder(id: string): Sticker {
+  return STICKERS.find(s => s.id === id) || PLACEHOLDER_STICKER;
 }
 
 /** Get stickers by category */
