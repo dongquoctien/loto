@@ -6,6 +6,7 @@ import { GameModule } from '../game/game.module';
 import { RoomModule } from '../room/room.module';
 import { TicketModule } from '../ticket/ticket.module';
 import { UserModule } from '../user/user.module';
+import { StickerModule } from '../sticker/sticker.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { UserModule } from '../user/user.module';
     forwardRef(() => RoomModule),
     TicketModule,
     UserModule,
+    StickerModule,
   ],
   providers: [GameGateway],
   exports: [GameGateway],
