@@ -231,7 +231,6 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer } from '@loto/shared
       display: flex;
       flex-direction: column;
       gap: 8px;
-      min-height: 270px;
     }
 
     .no-messages {

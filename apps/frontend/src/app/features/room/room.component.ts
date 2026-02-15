@@ -256,10 +256,10 @@ interface SheetInfo {
             <!-- My Sheets (grouped tickets) -->
             @if (mySheets().length > 0) {
               <div class="my-sheets">
-                <div class="sheets-header">
+                <!-- <div class="sheets-header">
                   <h3>Tờ Của Bạn</h3>
-                </div>
-                <div class="sheets-grid">
+                </div> -->
+                <div class="sheets-grid" [class.single-sheet]="mySheets().length === 1" [class.two-sheets]="mySheets().length === 2">
                   @for (sheet of mySheets(); track sheet.id) {
                     <app-sheet-display
                       [sheet]="sheet"
@@ -796,16 +796,100 @@ interface SheetInfo {
     .tickets-grid { display: grid; gap: 12px; }
 
     /* Sheets display */
-    .my-sheets { margin-bottom: 16px; }
-    .sheets-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .my-sheets { margin-bottom: 16px; flex: 1; display: flex; flex-direction: column; }
+    .sheets-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-shrink: 0; }
     .sheets-header h3 { margin: 0; font-size: 16px; color: #E4E6EB; }
     .sheets-grid {
       display: grid;
       gap: 16px;
       grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      flex: 1;
+      align-content: start;
     }
+
+    /* Single sheet - maximize space on PC */
+    .sheets-grid.single-sheet {
+      grid-template-columns: 1fr;
+      justify-items: center;
+      align-content: center;
+    }
+    .sheets-grid.single-sheet app-sheet-display {
+      width: 100%;
+      max-width: 900px;
+    }
+    .sheets-grid.single-sheet ::ng-deep .sheet {
+      max-width: 100% !important;
+    }
+    .sheets-grid.single-sheet ::ng-deep .cell {
+      height: 56px;
+    }
+    .sheets-grid.single-sheet ::ng-deep .cell-num {
+      font-size: 22px;
+      font-weight: 600;
+    }
+    .sheets-grid.single-sheet ::ng-deep .sheet-title {
+      font-size: 24px;
+      padding: 12px 16px;
+    }
+    .sheets-grid.single-sheet ::ng-deep .ticket-number-badge {
+      width: 30px;
+      height: 30px;
+      font-size: 16px;
+    }
+    .sheets-grid.single-sheet ::ng-deep .ticket-section {
+      padding-left: 40px;
+    }
+    .sheets-grid.single-sheet ::ng-deep .ticket-row {
+      gap: 4px;
+    }
+
+    /* Two sheets - side by side, maximize height */
+    .sheets-grid.two-sheets {
+      grid-template-columns: repeat(2, 1fr);
+      align-content: center;
+      gap: 24px;
+    }
+    .sheets-grid.two-sheets ::ng-deep .sheet {
+      max-width: 100% !important;
+    }
+    .sheets-grid.two-sheets ::ng-deep .cell {
+      height: 44px;
+    }
+    .sheets-grid.two-sheets ::ng-deep .cell-num {
+      font-size: 17px;
+      font-weight: 500;
+    }
+    .sheets-grid.two-sheets ::ng-deep .sheet-title {
+      font-size: 18px;
+    }
+
+    @media (max-width: 1400px) {
+      .sheets-grid.single-sheet ::ng-deep .cell { height: 48px; }
+      .sheets-grid.single-sheet ::ng-deep .cell-num { font-size: 18px; }
+      .sheets-grid.two-sheets ::ng-deep .cell { height: 38px; }
+      .sheets-grid.two-sheets ::ng-deep .cell-num { font-size: 15px; }
+    }
+
+    @media (max-width: 1200px) {
+      .sheets-grid.two-sheets {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Tablet landscape with 1 sheet - maximize display */
+    @media (min-width: 768px) and (max-width: 1024px) and (orientation: landscape) {
+      .sheets-grid.single-sheet ::ng-deep .cell { height: 44px; }
+      .sheets-grid.single-sheet ::ng-deep .cell-num { font-size: 18px; }
+      .sheets-grid.single-sheet app-sheet-display { max-width: 700px; }
+    }
+
     @media (max-width: 640px) {
       .sheets-grid { grid-template-columns: 1fr; gap: 12px; }
+      .sheets-grid.single-sheet ::ng-deep .cell { height: 32px; }
+      .sheets-grid.single-sheet ::ng-deep .cell-num { font-size: 14px; font-weight: 500; }
+      .sheets-grid.single-sheet ::ng-deep .sheet-title { font-size: 14px; padding: 8px 12px; }
+      .sheets-grid.single-sheet ::ng-deep .ticket-number-badge { width: 20px; height: 20px; font-size: 11px; }
+      .sheets-grid.single-sheet ::ng-deep .ticket-section { padding-left: 28px; }
     }
 
     .penalty-notice {
@@ -1118,7 +1202,7 @@ interface SheetInfo {
       .inline-controls {
         background: #242526;
         border-radius: 12px;
-        padding: 16px;
+        // padding: 16px;
         box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         flex-shrink: 0;
       }
