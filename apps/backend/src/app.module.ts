@@ -8,6 +8,7 @@ import { RoomModule } from './modules/room/room.module';
 import { TicketModule } from './modules/ticket/ticket.module';
 import { GameModule } from './modules/game/game.module';
 import { GatewayModule } from './modules/gateway/gateway.module';
+import { StickerModule } from './modules/sticker/sticker.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { GatewayModule } from './modules/gateway/gateway.module';
     TicketModule,
     GameModule,
     GatewayModule,
+    StickerModule,
   ],
 })
 export class AppModule {}

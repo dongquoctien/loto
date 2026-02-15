@@ -4,6 +4,8 @@ import { Router } from '@angular/router';
 import { Subject, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
+export type UserRole = 'user' | 'admin';
+
 interface AuthUser {
   id: number;
   username: string;
@@ -11,6 +13,8 @@ interface AuthUser {
   displayName: string;
   avatarUrl: string | null;
   qrCodeUrl: string | null;
+  role: UserRole;
+  winCount?: number;
 }
 
 interface AuthResponse {
@@ -33,6 +37,7 @@ export class AuthService {
 
   readonly user = this.currentUser.asReadonly();
   readonly isLoggedIn = computed(() => !!this.token());
+  readonly isAdmin = computed(() => this.currentUser()?.role === 'admin');
 
   constructor(
     private http: HttpClient,

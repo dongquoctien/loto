@@ -81,6 +81,7 @@ export class AuthService {
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
       qrCodeUrl: user.qrCodeUrl,
+      role: user.role,
     };
   }
 }

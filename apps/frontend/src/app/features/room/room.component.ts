@@ -575,6 +575,21 @@ interface SheetInfo {
       }
 
       <!-- Leave Confirmation Dialog -->
+      <!-- Room Not Found Popup -->
+      @if (showRoomNotFoundPopup()) {
+        <div class="leave-dialog-backdrop">
+          <div class="leave-dialog">
+            <ng-icon name="iconoirWarningTriangle" class="leave-dialog-icon"></ng-icon>
+            <h3>Phòng Không Tồn Tại</h3>
+            <p>Phòng này đã bị xóa hoặc không tồn tại.</p>
+            <div class="leave-dialog-actions">
+              <button class="btn-leave" (click)="onRoomNotFoundOk()">OK</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Leave Confirmation Dialog -->
       @if (showLeaveDialog()) {
         <div class="leave-dialog-backdrop" (click)="cancelLeaveDialog()">
           <div class="leave-dialog" (click)="$event.stopPropagation()">
@@ -1214,6 +1229,9 @@ export class RoomComponent implements OnInit, OnDestroy {
   passwordError = signal<string | null>(null);
   roomPassword = '';
   private pendingRoomCode: string | null = null;
+
+  // Room not found popup state
+  showRoomNotFoundPopup = signal(false);
 
   // UI state (mobile)
   copiedRoomCode = signal(false);
@@ -1938,6 +1956,13 @@ export class RoomComponent implements OnInit, OnDestroy {
       .subscribe((data) => {
         console.error('Socket error:', data.message);
 
+        // Handle room not found error
+        if (data.message.toLowerCase().includes('room not found') ||
+            data.message.toLowerCase().includes('not found')) {
+          this.showRoomNotFoundPopup.set(true);
+          return;
+        }
+
         // Handle password errors
         if (data.message === 'Password required' || data.message === 'Invalid password') {
           this.passwordError.set(data.message === 'Password required'
@@ -2331,6 +2356,11 @@ export class RoomComponent implements OnInit, OnDestroy {
 
   cancelLeaveDialog() {
     this.showLeaveDialog.set(false);
+  }
+
+  onRoomNotFoundOk() {
+    this.showRoomNotFoundPopup.set(false);
+    this.router.navigate(['/lobby']);
   }
 
   confirmLeaveRoom() {

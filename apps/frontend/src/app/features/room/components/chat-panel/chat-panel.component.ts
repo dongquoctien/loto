@@ -1,11 +1,12 @@
-import { Component, inject, ElementRef, ViewChild, AfterViewChecked, signal, HostListener } from '@angular/core';
+import { Component, inject, ElementRef, ViewChild, AfterViewChecked, signal, HostListener, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { iconoirChatBubble, iconoirSend, iconoirCheck, iconoirTrophy, iconoirEmoji, iconoirNavArrowDown } from '@ng-icons/iconoir';
 import { ChatService } from '@app/core/services/chat.service';
 import { AuthService } from '@app/core/services/auth.service';
-import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_CATEGORIES, Sticker, getStickerById } from '@loto/shared';
+import { StickerService, Sticker, StickerCategory } from '@app/core/services/sticker.service';
+import { ChatMessage, PaymentReportData, PaymentReportPayer } from '@loto/shared';
 
 @Component({
   selector: 'app-chat-panel',
@@ -164,20 +165,20 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
       @if (showStickerPicker()) {
         <div class="sticker-picker" (click)="$event.stopPropagation()">
           <div class="sticker-categories">
-            @for (cat of stickerCategories; track cat.id) {
+            @for (cat of stickerCategories(); track cat.id) {
               <button
                 class="category-btn"
-                [class.active]="selectedCategory() === cat.id"
-                (click)="selectCategory(cat.id)"
+                [class.active]="selectedCategorySlug() === cat.slug"
+                (click)="selectCategory(cat.slug)"
               >
                 {{ cat.icon }}
               </button>
             }
           </div>
           <div class="sticker-grid">
-            @for (sticker of filteredStickers(); track sticker.id) {
-              <button class="sticker-item" (click)="sendSticker(sticker.id)">
-                <img [src]="sticker.url" [alt]="sticker.id" loading="lazy" />
+            @for (sticker of filteredStickers(); track sticker.stickerId) {
+              <button class="sticker-item" (click)="sendSticker(sticker.stickerId)">
+                <img [src]="sticker.url" [alt]="sticker.stickerId" loading="lazy" />
               </button>
             }
           </div>
@@ -230,7 +231,7 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
       display: flex;
       flex-direction: column;
       gap: 8px;
-      min-height: 300px;
+      min-height: 270px;
     }
 
     .no-messages {
@@ -784,6 +785,7 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
       max-height: 280px;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
 
     .sticker-categories {
@@ -817,6 +819,7 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
       gap: 8px;
       padding: 8px;
       overflow-y: auto;
+      overflow-x: hidden;
       flex: 1;
     }
 
@@ -828,6 +831,7 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
       cursor: pointer;
       padding: 4px;
       transition: background 0.2s, transform 0.1s;
+      min-width: 0;
     }
 
     .sticker-item:hover {
@@ -839,6 +843,7 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
       width: 100%;
       height: 100%;
       object-fit: contain;
+      max-width: 100%;
     }
 
     .sticker-btn {
@@ -982,11 +987,12 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer, STICKERS, STICKER_C
     }
   `]
 })
-export class ChatPanelComponent implements AfterViewChecked {
+export class ChatPanelComponent implements AfterViewChecked, OnInit {
   @ViewChild('messagesContainer') private messagesContainer!: ElementRef;
 
   chatService = inject(ChatService);
   private authService = inject(AuthService);
+  private stickerService = inject(StickerService);
 
   newMessage = '';
   private shouldScrollToBottom = true;
@@ -1013,11 +1019,27 @@ export class ChatPanelComponent implements AfterViewChecked {
 
   /** Sticker picker state */
   showStickerPicker = signal(false);
-  selectedCategory = signal<string>('working');
-  stickerCategories = STICKER_CATEGORIES;
+  selectedCategorySlug = signal<string>('working');
+  stickerCategories = signal<StickerCategory[]>([]);
 
   /** Filtered stickers based on selected category */
-  filteredStickers = signal<Sticker[]>(STICKERS.filter(s => s.category === 'working'));
+  filteredStickers = signal<Sticker[]>([]);
+
+  ngOnInit(): void {
+    // Load stickers from API on init
+    this.stickerService.getActiveStickers().subscribe((stickers) => {
+      // Get categories from loaded stickers
+      const categories = this.stickerService.getCategories();
+      this.stickerCategories.set(categories);
+
+      // Set default category to first one if available
+      const defaultSlug = categories.length > 0 ? categories[0].slug : 'working';
+      this.selectedCategorySlug.set(defaultSlug);
+
+      // Filter stickers by default category
+      this.filteredStickers.set(stickers.filter((s) => s.category?.slug === defaultSlug));
+    });
+  }
 
   get currentUserId(): number | null {
     return this.authService.user()?.id ?? null;
@@ -1145,9 +1167,10 @@ export class ChatPanelComponent implements AfterViewChecked {
   }
 
   /** Select sticker category */
-  selectCategory(categoryId: string): void {
-    this.selectedCategory.set(categoryId);
-    this.filteredStickers.set(STICKERS.filter(s => s.category === categoryId));
+  selectCategory(categorySlug: string): void {
+    this.selectedCategorySlug.set(categorySlug);
+    const stickers = this.stickerService.stickers();
+    this.filteredStickers.set(stickers.filter((s) => s.category?.slug === categorySlug));
   }
 
   /** Send a sticker */
@@ -1157,10 +1180,10 @@ export class ChatPanelComponent implements AfterViewChecked {
     this.shouldScrollToBottom = true;
   }
 
-  /** Get sticker URL by ID */
+  /** Get sticker URL by ID - returns placeholder if not found */
   getStickerUrl(stickerId: string): string {
-    const sticker = getStickerById(stickerId);
-    return sticker?.url || '';
+    const sticker = this.stickerService.getStickerById(stickerId);
+    return sticker.url;
   }
 
   /** Close sticker picker when clicking outside */

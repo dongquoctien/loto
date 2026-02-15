@@ -1,3 +1,5 @@
+export type UserRole = 'user' | 'admin';
+
 export interface UserData {
   id: number;
   username: string;
@@ -7,6 +9,10 @@ export interface UserData {
   qrCodeUrl: string | null;
   isActive: boolean;
   createdAt: string;
+  role: UserRole;
+  isBanned?: boolean;
+  bannedAt?: string | null;
+  winCount?: number;
 }
 
 export interface UserPublic {
