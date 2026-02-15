@@ -53,7 +53,7 @@ type TabType = 'personal' | 'room';
             (click)="activeTab.set('room')"
           >
             <ng-icon name="iconoirGroup"></ng-icon>
-            Bảng Xếp Hạng
+            Xếp Hạng
           </button>
         </div>
 

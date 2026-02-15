@@ -22,6 +22,7 @@ import {
   iconoirPause,
   iconoirFlash,
   iconoirStatsUpSquare,
+  iconoirLogOut,
 } from '@ng-icons/iconoir';
 import { SocketService } from '../../core/services/socket.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -122,6 +123,7 @@ interface SheetInfo {
       iconoirPause,
       iconoirFlash,
       iconoirStatsUpSquare,
+      iconoirLogOut,
     }),
   ],
   template: `
@@ -168,7 +170,7 @@ interface SheetInfo {
         <!-- Sticky Top Area -->
         <div class="sticky-top">
           <!-- Header -->
-          <header class="room-header">
+          <header class="room-header" [class.playing-mode]="gameStatus() !== 'preparing' && gameStatus() !== 'finished'">
             <div class="room-title">
               <h2>{{ room()?.name }}</h2>
               <span class="room-code" (click)="copyRoomCode()" title="Bấm để sao chép">
@@ -207,15 +209,19 @@ interface SheetInfo {
                   </svg>
                 </button>
               }
-              @if (gameStatus() !== 'preparing') {
+              @if (gameStatus() !== 'preparing' && gameStatus() !== 'finished') {
                 <button class="sound-toggle" (click)="toggleSound()" title="Âm thanh game">
                   <ng-icon [name]="soundEnabled() ? 'iconoirSoundHigh' : 'iconoirSoundOff'"></ng-icon>
                 </button>
               }
               <button class="report-btn" (click)="openReportDialog()" title="Báo cáo thống kê">
                 <ng-icon name="iconoirStatsUpSquare"></ng-icon>
+                <span class="btn-text">Thống kê</span>
               </button>
-              <button class="leave-btn" (click)="leaveRoom()" [disabled]="isGameInProgress()">Rời Phòng</button>
+              <button class="leave-btn" (click)="showLeaveConfirm()" [disabled]="isGameInProgress()" title="Rời phòng">
+                <ng-icon name="iconoirLogOut"></ng-icon>
+                <span class="btn-text">Rời Phòng</span>
+              </button>
             </div>
           </header>
 
@@ -567,6 +573,21 @@ interface SheetInfo {
       @if (showReportDialog()) {
         <app-report-dialog (close)="closeReportDialog()"></app-report-dialog>
       }
+
+      <!-- Leave Confirmation Dialog -->
+      @if (showLeaveDialog()) {
+        <div class="leave-dialog-backdrop" (click)="cancelLeaveDialog()">
+          <div class="leave-dialog" (click)="$event.stopPropagation()">
+            <ng-icon name="iconoirLogOut" class="leave-dialog-icon"></ng-icon>
+            <h3>Rời Phòng?</h3>
+            <p>Bạn có chắc chắn muốn rời khỏi phòng này không?</p>
+            <div class="leave-dialog-actions">
+              <button class="btn-cancel" (click)="cancelLeaveDialog()">Ở Lại</button>
+              <button class="btn-leave" (click)="confirmLeaveRoom()">Rời Phòng</button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -609,6 +630,34 @@ interface SheetInfo {
     .btn-submit { background: #1877F2; color: white; }
     .btn-submit:hover:not(:disabled) { background: #166FE5; }
     .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Leave Confirmation Dialog */
+    .leave-dialog-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+      z-index: 1000; display: flex; align-items: center; justify-content: center;
+    }
+    .leave-dialog {
+      background: #242526; border-radius: 16px; padding: 24px 32px;
+      max-width: 360px; width: 90%; text-align: center;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+      animation: leaveDialogPop 0.2s ease-out;
+    }
+    @keyframes leaveDialogPop {
+      0% { transform: scale(0.9); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .leave-dialog-icon { font-size: 48px; color: #FA383E; margin-bottom: 8px; }
+    .leave-dialog h3 { margin: 0 0 8px; font-size: 20px; color: #E4E6EB; }
+    .leave-dialog p { margin: 0 0 20px; color: #B0B3B8; font-size: 14px; }
+    .leave-dialog-actions { display: flex; gap: 12px; }
+    .leave-dialog-actions button {
+      flex: 1; padding: 10px 16px; border-radius: 8px; font-size: 15px;
+      font-weight: 600; cursor: pointer; font-family: inherit; border: none;
+    }
+    .leave-dialog .btn-cancel { background: #3A3B3C; color: #E4E6EB; }
+    .leave-dialog .btn-cancel:hover { background: #4E4F50; }
+    .leave-dialog .btn-leave { background: #FA383E; color: white; }
+    .leave-dialog .btn-leave:hover { background: #E5343A; }
 
     .loading {
       display: flex; flex-direction: column; align-items: center;
@@ -689,7 +738,12 @@ interface SheetInfo {
     .hands-free-toggle.active { background: rgba(0,164,0,0.2); border-color: #00A400; color: #00A400; }
     .toggle-icon { font-size: 14px;  }
     .sound-toggle { background: none; border: 1px solid #3A3B3C; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 18px; }
-    .report-btn { background: none; border: 1px solid #3A3B3C; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 18px; color: #E4E6EB; }
+    .report-btn {
+      background: none; border: 1px solid #3A3B3C; border-radius: 6px;
+      padding: 4px 10px; cursor: pointer; font-size: 14px; color: #E4E6EB;
+      display: flex; align-items: center; gap: 6px; font-family: inherit;
+    }
+    .report-btn ng-icon { font-size: 18px; }
     .report-btn:hover { border-color: #1877F2; color: #1877F2; }
     .music-toggle { background: none; border: 1px solid #3A3B3C; border-radius: 6px; padding: 4px 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .music-toggle .music-icon { width: 20px; height: 20px; stroke: #E4E6EB; }
@@ -699,10 +753,20 @@ interface SheetInfo {
     .leave-btn {
       background: #FA383E; border: none; color: white; padding: 6px 14px;
       border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit;
+      display: flex; align-items: center; gap: 6px;
     }
+    .leave-btn ng-icon { font-size: 16px; }
     .leave-btn:hover:not(:disabled) { background: #E5343A; }
     .leave-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .room-body { display: flex; flex: 1; }
+
+    /* Playing mode: show only room name, code, hands-free, sound-toggle */
+    .room-header.playing-mode .price-badge,
+    .room-header.playing-mode .kinh-prize-badge,
+    .room-header.playing-mode .music-toggle,
+    .room-header.playing-mode .report-btn,
+    .room-header.playing-mode .leave-btn { display: none; }
+
+    .room-body { display: flex; flex: 1; max-width: 1700px!important; }
     .game-area { flex: 1; padding: 16px 20px; }
     .tickets-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
     .tickets-header h3 { margin: 0; font-size: 16px; }
@@ -1076,16 +1140,41 @@ interface SheetInfo {
       }
     }
 
+    /* Large screens (>= 1600px): wider sidebar with flexbox layout */
+    @media (min-width: 1600px) {
+      .room-body {
+        display: flex;
+        gap: 24px;
+        padding: 0 24px;
+        max-width: none;
+      }
+      .game-area {
+        flex: 1;
+        max-width: none;
+        margin: 0;
+      }
+      .desktop-sidebar {
+        position: sticky;
+        top: 140px;
+        width: 400px;
+        min-width: 400px;
+        max-width: 400px;
+        right: auto;
+        align-self: flex-start;
+      }
+    }
+
     @media (max-width: 767px) {
       .near-win-toast-stack { top: 56px; }
       .room-header { padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
       .room-title { gap: 6px; min-width: 0; flex: 1; }
-      .room-title h2 { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+      .room-title h2 { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 85px; }
       .room-code, .price-badge, .kinh-prize-badge { font-size: 10px; padding: 1px 6px; }
       .room-actions { gap: 6px; flex-shrink: 0; }
       .hands-free-toggle { padding: 3px 8px; font-size: 11px; }
-      .sound-toggle, .report-btn { padding: 3px 6px; font-size: 16px; }
-      .leave-btn { padding: 4px 10px; font-size: 12px; white-space: nowrap; }
+      .sound-toggle, .report-btn, .leave-btn { padding: 3px 6px; font-size: 16px; }
+      .report-btn .btn-text, .leave-btn .btn-text { display: none; }
+      .leave-btn { background: #FA383E; border: 1px solid #FA383E; border-radius: 6px; color: white; }
       .game-area { padding: 10px 12px; }
       .room-body { flex-direction: column; }
       .my-tickets { margin-bottom: 8px; }
@@ -1094,6 +1183,7 @@ interface SheetInfo {
       .mobile-bottom-bar { display: flex; }
       .sheet-backdrop { display: block; }
       .room-container { padding-bottom: 68px; }
+
     }
     @media (max-width: 500px) {
       .tickets-grid { grid-template-columns: 1fr !important; }
@@ -1115,6 +1205,9 @@ export class RoomComponent implements OnInit, OnDestroy {
 
   // Report dialog state
   showReportDialog = signal(false);
+
+  // Leave confirmation dialog state
+  showLeaveDialog = signal(false);
 
   // Password dialog state
   showPasswordDialog = signal(false);
@@ -2229,6 +2322,24 @@ export class RoomComponent implements OnInit, OnDestroy {
         el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }, 100);
+  }
+
+  showLeaveConfirm() {
+    if (this.isGameInProgress()) return;
+    this.showLeaveDialog.set(true);
+  }
+
+  cancelLeaveDialog() {
+    this.showLeaveDialog.set(false);
+  }
+
+  confirmLeaveRoom() {
+    this.showLeaveDialog.set(false);
+    const room = this.room();
+    if (room) {
+      this.socketService.emit('room:leave', { roomId: room.id });
+    }
+    this.router.navigate(['/lobby']);
   }
 
   leaveRoom() {
