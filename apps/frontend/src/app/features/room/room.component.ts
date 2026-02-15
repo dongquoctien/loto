@@ -23,6 +23,8 @@ import {
   iconoirFlash,
   iconoirStatsUpSquare,
   iconoirLogOut,
+  iconoirExpand,
+  iconoirCollapse,
 } from '@ng-icons/iconoir';
 import { SocketService } from '../../core/services/socket.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -124,6 +126,8 @@ interface SheetInfo {
       iconoirFlash,
       iconoirStatsUpSquare,
       iconoirLogOut,
+      iconoirExpand,
+      iconoirCollapse,
     }),
   ],
   template: `
@@ -353,7 +357,7 @@ interface SheetInfo {
           </div>
 
           <!-- Desktop Sidebar (Controls + Ready + Player List) -->
-          <div class="desktop-sidebar">
+          <div class="desktop-sidebar" [class.expanded]="sidebarExpanded()">
             <!-- Owner Controls -->
             @if (isOwner()) {
               <div class="inline-controls">
@@ -395,7 +399,10 @@ interface SheetInfo {
             }
 
             <!-- Player List -->
-            <div class="desktop-player-list">
+            <div class="desktop-player-list" [class.expanded]="sidebarExpanded()">
+              <button class="sidebar-expand-toggle" (click)="sidebarExpanded.set(!sidebarExpanded())" [title]="sidebarExpanded() ? 'Thu nhỏ' : 'Mở rộng'">
+                <ng-icon [name]="sidebarExpanded() ? 'iconoirCollapse' : 'iconoirExpand'" class="expand-icon"></ng-icon>
+              </button>
               <app-player-list
                 [players]="playersWithSheetCounts()"
                 [ownerId]="room()?.ownerId ?? null"
@@ -1216,12 +1223,49 @@ interface SheetInfo {
         box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         display: flex;
         flex-direction: column;
+        position: relative;
       }
       .desktop-player-list app-player-list {
         flex: 1;
         min-height: 0;
         display: flex;
         flex-direction: column;
+      }
+      /* Sidebar expand toggle button - top right corner */
+      .sidebar-expand-toggle {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        background: rgba(58, 59, 60, 0.9);
+        border: none;
+        border-radius: 6px;
+        color: #B0B3B8;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .sidebar-expand-toggle:hover {
+        background: #4E4F50;
+        color: #E4E6EB;
+      }
+      .sidebar-expand-toggle .expand-icon {
+        font-size: 16px;
+      }
+      /* Expanded state - hide controls panel */
+      .desktop-sidebar.expanded .inline-controls,
+      .desktop-sidebar.expanded .sidebar-ready-section {
+        display: none;
+      }
+      .desktop-player-list.expanded {
+        flex: 1;
+        height: auto;
+        max-height: none;
       }
       .sidebar-ready-section {
         display: block;
@@ -1321,6 +1365,9 @@ export class RoomComponent implements OnInit, OnDestroy {
   copiedRoomCode = signal(false);
   showPlayerSheet = signal(false);
   showControlsSheet = signal(false);
+
+  // Sidebar expanded state (desktop/tablet)
+  sidebarExpanded = signal(false);
 
   // Kinh alert popup for owner
   showKinhAlert = signal(false);
