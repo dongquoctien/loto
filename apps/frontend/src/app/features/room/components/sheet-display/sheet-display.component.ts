@@ -86,6 +86,7 @@ const COLOR_HEX: Record<string, { bg: string; border: string; cellBg: string; ce
       border-radius: 8px;
       overflow: hidden;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      max-width: 655px;
     }
 
     .sheet-header {
