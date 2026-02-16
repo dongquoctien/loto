@@ -23,15 +23,11 @@ export interface Sticker {
   sortOrder: number;
 }
 
-export const PLACEHOLDER_STICKER: Sticker = {
-  id: 0,
-  stickerId: 'placeholder',
-  name: 'Không khả dụng',
-  url: '/assets/sticker-unavailable.jpg',
-  categoryId: 0,
-  isActive: false,
-  sortOrder: 0,
-};
+interface PublicSettings {
+  sticker_unavailable_url?: string;
+}
+
+const DEFAULT_PLACEHOLDER_URL = '/assets/sticker-unavailable.jpg';
 
 @Injectable({ providedIn: 'root' })
 export class StickerService {
@@ -42,8 +38,46 @@ export class StickerService {
   private cacheLoaded = signal(false);
   private stickersRequest$: Observable<Sticker[]> | null = null;
 
+  // Placeholder URL loaded from settings
+  private placeholderUrl = signal<string>(DEFAULT_PLACEHOLDER_URL);
+  private settingsLoaded = signal(false);
+
   readonly stickers = computed(() => this.stickersCache());
   readonly isLoaded = computed(() => this.cacheLoaded());
+
+  /**
+   * Get placeholder sticker with configurable URL
+   */
+  readonly placeholderSticker = computed<Sticker>(() => ({
+    id: 0,
+    stickerId: 'placeholder',
+    name: 'Không khả dụng',
+    url: this.placeholderUrl(),
+    categoryId: 0,
+    isActive: false,
+    sortOrder: 0,
+  }));
+
+  constructor() {
+    this.loadPublicSettings();
+  }
+
+  /**
+   * Load public settings (sticker unavailable URL)
+   */
+  private loadPublicSettings(): void {
+    this.http
+      .get<PublicSettings>(`${environment.apiUrl}/settings/public`)
+      .pipe(
+        catchError(() => of({} as PublicSettings))
+      )
+      .subscribe((settings) => {
+        if (settings.sticker_unavailable_url) {
+          this.placeholderUrl.set(settings.sticker_unavailable_url);
+        }
+        this.settingsLoaded.set(true);
+      });
+  }
 
   /**
    * Get active stickers from API with caching
@@ -83,7 +117,7 @@ export class StickerService {
    */
   getStickerById(stickerId: string): Sticker {
     const sticker = this.stickersCache().find((s) => s.stickerId === stickerId);
-    return sticker || PLACEHOLDER_STICKER;
+    return sticker || this.placeholderSticker();
   }
 
   /**
@@ -93,7 +127,7 @@ export class StickerService {
     return this.getActiveStickers().pipe(
       map((stickers) => {
         const sticker = stickers.find((s) => s.stickerId === stickerId);
-        return sticker || PLACEHOLDER_STICKER;
+        return sticker || this.placeholderSticker();
       })
     );
   }

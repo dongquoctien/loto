@@ -1219,7 +1219,7 @@ interface SheetInfo {
         overflow: hidden;
         background: #242526;
         border-radius: 12px;
-        padding: 12px;
+        // padding: 12px;
         box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         display: flex;
         flex-direction: column;
@@ -1234,8 +1234,8 @@ interface SheetInfo {
       /* Sidebar expand toggle button - top right corner */
       .sidebar-expand-toggle {
         position: absolute;
-        top: 8px;
-        right: 8px;
+        top: 0;
+        right: 5px; 
         z-index: 10;
         display: flex;
         align-items: center;

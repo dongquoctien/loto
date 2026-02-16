@@ -9,6 +9,9 @@ import {
   iconoirLogOut,
   iconoirMenu,
   iconoirXmark,
+  iconoirHomeAlt,
+  iconoirSettings,
+  iconoirStatsReport,
 } from '@ng-icons/iconoir';
 import { AuthService } from '../../core/services/auth.service';
 
@@ -24,6 +27,9 @@ import { AuthService } from '../../core/services/auth.service';
       iconoirLogOut,
       iconoirMenu,
       iconoirXmark,
+      iconoirHomeAlt,
+      iconoirSettings,
+      iconoirStatsReport,
     }),
   ],
   template: `
@@ -47,6 +53,10 @@ import { AuthService } from '../../core/services/auth.service';
             <span>Về Lobby</span>
           </a>
           <div class="nav-divider"></div>
+          <a routerLink="dashboard" routerLinkActive="active" class="nav-item" (click)="sidebarOpen = false">
+            <ng-icon name="iconoirStatsReport"></ng-icon>
+            <span>Dashboard</span>
+          </a>
           <a routerLink="stickers" routerLinkActive="active" class="nav-item" (click)="sidebarOpen = false">
             <ng-icon name="iconoirMediaImage"></ng-icon>
             <span>Quản lý Sticker</span>
@@ -54,6 +64,15 @@ import { AuthService } from '../../core/services/auth.service';
           <a routerLink="users" routerLinkActive="active" class="nav-item" (click)="sidebarOpen = false">
             <ng-icon name="iconoirGroup"></ng-icon>
             <span>Quản lý User</span>
+          </a>
+          <a routerLink="rooms" routerLinkActive="active" class="nav-item" (click)="sidebarOpen = false">
+            <ng-icon name="iconoirHomeAlt"></ng-icon>
+            <span>Quản lý Phòng</span>
+          </a>
+          <div class="nav-divider"></div>
+          <a routerLink="settings" routerLinkActive="active" class="nav-item" (click)="sidebarOpen = false">
+            <ng-icon name="iconoirSettings"></ng-icon>
+            <span>Cài đặt hệ thống</span>
           </a>
         </nav>
         <div class="sidebar-footer">

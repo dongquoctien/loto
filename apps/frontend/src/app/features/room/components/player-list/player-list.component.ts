@@ -158,7 +158,7 @@ type TabType = 'players' | 'chat';
     .tab-headers {
       display: flex;
       border-bottom: 1px solid #3A3B3C;
-      padding: 8px 8px 0;
+      // padding: 8px 8px 0;
       gap: 4px;
     }
 

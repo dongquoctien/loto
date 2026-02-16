@@ -8,8 +8,15 @@ export const ADMIN_ROUTES: Routes = [
     children: [
       {
         path: '',
-        redirectTo: 'stickers',
+        redirectTo: 'dashboard',
         pathMatch: 'full',
+      },
+      {
+        path: 'dashboard',
+        loadComponent: () =>
+          import('./components/dashboard.component').then(
+            (m) => m.DashboardComponent
+          ),
       },
       {
         path: 'stickers',
@@ -23,6 +30,20 @@ export const ADMIN_ROUTES: Routes = [
         loadComponent: () =>
           import('./components/user-management.component').then(
             (m) => m.UserManagementComponent
+          ),
+      },
+      {
+        path: 'rooms',
+        loadComponent: () =>
+          import('./components/room-management.component').then(
+            (m) => m.RoomManagementComponent
+          ),
+      },
+      {
+        path: 'settings',
+        loadComponent: () =>
+          import('./components/system-settings.component').then(
+            (m) => m.SystemSettingsComponent
           ),
       },
     ],

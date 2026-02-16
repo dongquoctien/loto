@@ -10,9 +10,13 @@ import { KinhClaimEntity } from './entities/kinh-claim.entity';
 import { GameService } from './game.service';
 import { ReportService } from './report.service';
 import { ReportController } from './report.controller';
+import { AdminStatsService } from './admin-stats.service';
+import { AdminStatsController } from './admin-stats.controller';
 import { TicketModule } from '../ticket/ticket.module';
 import { RoomModule } from '../room/room.module';
 import { UserModule } from '../user/user.module';
+import { RoomEntity } from '../room/entities/room.entity';
+import { UserEntity } from '../user/user.entity';
 
 @Module({
   imports: [
@@ -24,13 +28,15 @@ import { UserModule } from '../user/user.module';
       GameResultEntity,
       PenaltyEntity,
       KinhClaimEntity,
+      RoomEntity,
+      UserEntity,
     ]),
     TicketModule,
     forwardRef(() => RoomModule),
     UserModule,
   ],
-  controllers: [ReportController],
-  providers: [GameService, ReportService],
-  exports: [GameService, ReportService],
+  controllers: [ReportController, AdminStatsController],
+  providers: [GameService, ReportService, AdminStatsService],
+  exports: [GameService, ReportService, AdminStatsService],
 })
 export class GameModule {}
