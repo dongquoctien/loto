@@ -776,12 +776,12 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer } from '@loto/shared
       bottom: 70px;
       left: 12px;
       right: 12px;
+      max-height: 320px;
       background: #2D2E2F;
       border-radius: 12px;
       border: 1px solid #3A3B3C;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
       z-index: 100;
-      max-height: 280px;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -792,6 +792,16 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer } from '@loto/shared
       gap: 4px;
       padding: 8px;
       border-bottom: 1px solid #3A3B3C;
+      overflow-x: auto;
+      overflow-y: hidden;
+      flex-shrink: 0;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    .sticker-categories::-webkit-scrollbar {
+      display: none;
     }
 
     .category-btn {
@@ -802,6 +812,9 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer } from '@loto/shared
       cursor: pointer;
       font-size: 16px;
       transition: background 0.2s;
+      flex-shrink: 0;
+      min-width: 40px;
+      min-height: 32px;
     }
 
     .category-btn:hover {
@@ -966,7 +979,22 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer } from '@loto/shared
       }
 
       .sticker-picker {
-        max-height: 220px;
+        left: 8px;
+        right: 8px;
+        bottom: 65px;
+        max-height: calc(100% - 75px);
+      }
+
+      .sticker-categories {
+        padding: 6px;
+        gap: 2px;
+      }
+
+      .category-btn {
+        padding: 4px 8px;
+        font-size: 14px;
+        min-width: 36px;
+        min-height: 28px;
       }
 
       .scroll-to-bottom-btn {
@@ -975,6 +1003,34 @@ import { ChatMessage, PaymentReportData, PaymentReportPayer } from '@loto/shared
         width: 32px;
         height: 32px;
         font-size: 16px;
+      }
+    }
+
+    /* Tablet adjustments */
+    @media (min-width: 481px) and (max-width: 768px) {
+      .sticker-picker {
+        bottom: 68px;
+        max-height: calc(100% - 78px);
+      }
+
+      .sticker-categories {
+        padding: 8px 6px;
+      }
+
+      .category-btn {
+        padding: 6px 10px;
+        font-size: 15px;
+      }
+    }
+
+    /* Large screen adjustments */
+    @media (min-width: 769px) {
+      .sticker-picker {
+        max-width: 400px;
+      }
+
+      .sticker-grid {
+        grid-template-columns: repeat(5, 1fr);
       }
     }
 
