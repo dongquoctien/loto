@@ -9,6 +9,7 @@ import { TicketModule } from './modules/ticket/ticket.module';
 import { GameModule } from './modules/game/game.module';
 import { GatewayModule } from './modules/gateway/gateway.module';
 import { StickerModule } from './modules/sticker/sticker.module';
+import { SystemSettingModule } from './modules/setting/system-setting.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { StickerModule } from './modules/sticker/sticker.module';
     GameModule,
     GatewayModule,
     StickerModule,
+    SystemSettingModule,
   ],
 })
 export class AppModule {}

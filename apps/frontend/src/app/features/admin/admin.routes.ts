@@ -25,6 +25,20 @@ export const ADMIN_ROUTES: Routes = [
             (m) => m.UserManagementComponent
           ),
       },
+      {
+        path: 'rooms',
+        loadComponent: () =>
+          import('./components/room-management.component').then(
+            (m) => m.RoomManagementComponent
+          ),
+      },
+      {
+        path: 'settings',
+        loadComponent: () =>
+          import('./components/system-settings.component').then(
+            (m) => m.SystemSettingsComponent
+          ),
+      },
     ],
   },
 ];
