@@ -351,24 +351,38 @@ export class AdminStatsService {
 
     const qb = this.roomRepo
       .createQueryBuilder('r')
-      .innerJoin('users', 'u', 'r.owner_id = u.id')
+      .leftJoin('users', 'u', 'r.owner_id = u.id')
       .select([
         'r.id as roomId',
         'r.room_code as roomCode',
         'r.name as roomName',
-        'u.display_name as ownerName',
+        'COALESCE(u.display_name, u.username) as ownerName',
         'r.price_per_sheet as pricePerSheet',
         'r.status as status',
         'r.created_at as createdAt',
-        '(SELECT COUNT(*) FROM game_sessions gs WHERE gs.room_id = r.id AND gs.status = \'finished\') as totalGames',
+      ])
+      .addSelect(
+        `(SELECT COUNT(*) FROM game_sessions gs WHERE gs.room_id = r.id AND gs.status = 'finished')`,
+        'totalGames',
+      )
+      .addSelect(
         `(SELECT COUNT(*) FROM purchased_sheets ps
           INNER JOIN game_sessions gs ON ps.session_id = gs.id
-          WHERE gs.room_id = r.id AND gs.status = 'finished') as totalSheets`,
-        `(SELECT COALESCE(SUM(r.price_per_sheet), 0) FROM purchased_sheets ps
+          WHERE gs.room_id = r.id AND gs.status = 'finished')`,
+        'totalSheets',
+      )
+      .addSelect(
+        `(SELECT COALESCE(COUNT(*) * r.price_per_sheet, 0) FROM purchased_sheets ps
           INNER JOIN game_sessions gs ON ps.session_id = gs.id
-          WHERE gs.room_id = r.id AND gs.status = 'finished') as totalRevenue`,
-      ])
-      .orderBy('totalRevenue', 'DESC')
+          WHERE gs.room_id = r.id AND gs.status = 'finished')`,
+        'totalRevenue',
+      )
+      .orderBy(
+        `(SELECT COALESCE(COUNT(*) * r.price_per_sheet, 0) FROM purchased_sheets ps
+          INNER JOIN game_sessions gs ON ps.session_id = gs.id
+          WHERE gs.room_id = r.id AND gs.status = 'finished')`,
+        'DESC',
+      )
       .limit(limit)
       .offset(offset);
 

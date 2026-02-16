@@ -310,11 +310,11 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
       }
 
-      // Delete room from DB
-      await this.roomService.deleteRoom(data.roomId);
+      // Close room (preserves historical data for statistics)
+      await this.roomService.closeRoom(data.roomId);
 
-      // Notify all clients (lobby) that room was deleted
-      this.server.emit('room:deleted', { roomId: data.roomId });
+      // Notify all clients (lobby) that room was closed
+      this.server.emit('room:closed', { roomId: data.roomId });
     } else {
       const activeSession = this.gameService.findSessionForRoom(data.roomId);
 

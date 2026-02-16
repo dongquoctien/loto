@@ -473,9 +473,9 @@ export class LobbyComponent implements OnInit, OnDestroy {
         this.rooms.update((rooms) => [room, ...rooms]);
       });
 
-    // Listen for room deletion (owner left)
+    // Listen for room closed (owner left)
     this.socketService
-      .on<{ roomId: number }>('room:deleted')
+      .on<{ roomId: number }>('room:closed')
       .pipe(takeUntil(this.destroy$))
       .subscribe(({ roomId }) => {
         this.rooms.update((rooms) => rooms.filter((r) => r.id !== roomId));

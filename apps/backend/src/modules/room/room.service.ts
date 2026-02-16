@@ -107,6 +107,11 @@ export class RoomService {
   ): Promise<RoomEntity> {
     const room = await this.findByCode(roomCode);
 
+    // Check if room is closed
+    if (room.status === 'closed') {
+      throw new ForbiddenException('Phòng đã đóng');
+    }
+
     const existing = await this.roomPlayerRepository.findOne({
       where: { roomId: room.id, userId },
     });
@@ -157,8 +162,24 @@ export class RoomService {
     await this.roomPlayerRepository.delete({ roomId, userId });
   }
 
+  /**
+   * Close a room (set status to closed) and remove all players.
+   * This preserves historical game data for statistics.
+   */
+  async closeRoom(roomId: number): Promise<void> {
+    // Remove all players from the room
+    await this.roomPlayerRepository.delete({ roomId });
+
+    // Set room status to closed (preserves history)
+    await this.roomRepository.update({ id: roomId }, { status: 'closed' });
+  }
+
+  /**
+   * @deprecated Use closeRoom() to preserve historical data for statistics.
+   * Only use deleteRoom() when you actually want to permanently delete all data.
+   */
   async deleteRoom(roomId: number): Promise<void> {
-    // Delete all players first, then the room (cascade should handle it, but be explicit)
+    // Delete all players first, then the room (cascade will delete game history!)
     await this.roomPlayerRepository.delete({ roomId });
     await this.roomRepository.delete({ id: roomId });
   }
