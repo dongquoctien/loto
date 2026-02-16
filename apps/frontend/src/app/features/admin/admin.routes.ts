@@ -8,8 +8,15 @@ export const ADMIN_ROUTES: Routes = [
     children: [
       {
         path: '',
-        redirectTo: 'stickers',
+        redirectTo: 'dashboard',
         pathMatch: 'full',
+      },
+      {
+        path: 'dashboard',
+        loadComponent: () =>
+          import('./components/dashboard.component').then(
+            (m) => m.DashboardComponent
+          ),
       },
       {
         path: 'stickers',

@@ -11,6 +11,7 @@ import {
   iconoirXmark,
   iconoirHomeAlt,
   iconoirSettings,
+  iconoirStatsReport,
 } from '@ng-icons/iconoir';
 import { AuthService } from '../../core/services/auth.service';
 
@@ -28,6 +29,7 @@ import { AuthService } from '../../core/services/auth.service';
       iconoirXmark,
       iconoirHomeAlt,
       iconoirSettings,
+      iconoirStatsReport,
     }),
   ],
   template: `
@@ -51,6 +53,10 @@ import { AuthService } from '../../core/services/auth.service';
             <span>Về Lobby</span>
           </a>
           <div class="nav-divider"></div>
+          <a routerLink="dashboard" routerLinkActive="active" class="nav-item" (click)="sidebarOpen = false">
+            <ng-icon name="iconoirStatsReport"></ng-icon>
+            <span>Dashboard</span>
+          </a>
           <a routerLink="stickers" routerLinkActive="active" class="nav-item" (click)="sidebarOpen = false">
             <ng-icon name="iconoirMediaImage"></ng-icon>
             <span>Quản lý Sticker</span>
