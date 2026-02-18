@@ -66,7 +66,7 @@ export class UserService {
   async getPublicProfile(userId: number): Promise<PublicPlayerProfile> {
     const user = await this.findById(userId);
 
-    // Count total games played (sessions where user purchased sheets)
+    // Count total games played (sessions where user purchased sheets AND game finished)
     const gamesPlayedResult = await this.dataSource.query(
       `SELECT COUNT(DISTINCT ps.session_id) as gamesPlayed
        FROM purchased_sheets ps
@@ -75,6 +75,16 @@ export class UserService {
       [userId],
     );
     const gamesPlayed = parseInt(gamesPlayedResult[0]?.gamesPlayed || '0', 10);
+
+    // Count actual wins from game_results (more accurate than users.win_count)
+    const winCountResult = await this.dataSource.query(
+      `SELECT COUNT(*) as winCount
+       FROM game_results gr
+       INNER JOIN game_sessions gs ON gr.session_id = gs.id
+       WHERE gr.winner_id = ? AND gs.status = 'finished'`,
+      [userId],
+    );
+    const winCount = parseInt(winCountResult[0]?.winCount || '0', 10);
 
     // Calculate total revenue (tiền thắng được từ các trận)
     // Revenue = tổng tiền những người thua trả khi user thắng
@@ -91,7 +101,6 @@ export class UserService {
     );
     const totalRevenue = parseInt(revenueResult[0]?.totalRevenue || '0', 10);
 
-    const winCount = user.winCount ?? 0;
     const winRate = gamesPlayed > 0 ? Math.round((winCount / gamesPlayed) * 100 * 10) / 10 : 0;
 
     return {
