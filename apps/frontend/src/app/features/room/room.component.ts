@@ -44,6 +44,7 @@ import { GameControlsComponent } from './components/game-controls/game-controls.
 import { KinhButtonComponent } from './components/kinh-button/kinh-button.component';
 import { WinnerOverlayComponent, PaymentReportItem } from './components/winner-overlay/winner-overlay.component';
 import { PlayerListComponent } from './components/player-list/player-list.component';
+import { PlayerProfilePopupComponent } from './components/player-profile-popup/player-profile-popup.component';
 import { KinhClaimOverlayComponent } from './components/kinh-claim-overlay/kinh-claim-overlay.component';
 import { ChallengeOverlayComponent } from './components/challenge-overlay/challenge-overlay.component';
 import { ReportDialogComponent } from './components/report-dialog/report-dialog.component';
@@ -103,6 +104,7 @@ interface SheetInfo {
     KinhButtonComponent,
     WinnerOverlayComponent,
     PlayerListComponent,
+    PlayerProfilePopupComponent,
     KinhClaimOverlayComponent,
     ChallengeOverlayComponent,
     ReportDialogComponent,
@@ -410,7 +412,8 @@ interface SheetInfo {
                 [penalizedPlayers]="penalizedPlayersSet()"
                 [nearWinPlayers]="nearWinPlayers()"
                 [kinhClaimantIds]="kinhClaimantUserIds()"
-                [roomStatus]="gameStatus() === 'preparing' ? 'waiting' : 'playing'">
+                [roomStatus]="gameStatus() === 'preparing' ? 'waiting' : 'playing'"
+                (playerClick)="openPlayerProfile($event)">
               </app-player-list>
             </div>
           </div>
@@ -472,7 +475,8 @@ interface SheetInfo {
               [nearWinPlayers]="nearWinPlayers()"
               [kinhClaimantIds]="kinhClaimantUserIds()"
               [roomStatus]="gameStatus() === 'preparing' ? 'waiting' : 'playing'"
-              [isSheetOpen]="showPlayerSheet()">
+              [isSheetOpen]="showPlayerSheet()"
+              (playerClick)="openPlayerProfile($event)">
             </app-player-list>
           </div>
         </div>
@@ -609,6 +613,14 @@ interface SheetInfo {
             </div>
           </div>
         </div>
+      }
+
+      <!-- Player Profile Popup -->
+      @if (selectedPlayerId()) {
+        <app-player-profile-popup
+          [playerId]="selectedPlayerId()!"
+          (close)="closePlayerProfile()"
+        />
       }
     </div>
   `,
@@ -1360,6 +1372,9 @@ export class RoomComponent implements OnInit, OnDestroy {
 
   // Room not found popup state
   showRoomNotFoundPopup = signal(false);
+
+  // Player profile popup state
+  selectedPlayerId = signal<number | null>(null);
 
   // UI state (mobile)
   copiedRoomCode = signal(false);
@@ -2575,5 +2590,13 @@ export class RoomComponent implements OnInit, OnDestroy {
 
   closeReportDialog() {
     this.showReportDialog.set(false);
+  }
+
+  openPlayerProfile(userId: number) {
+    this.selectedPlayerId.set(userId);
+  }
+
+  closePlayerProfile() {
+    this.selectedPlayerId.set(null);
   }
 }

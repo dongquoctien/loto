@@ -1,16 +1,28 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { UserEntity } from './user.entity';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { AdminCreateUserDto, AdminUpdateUserDto } from './dto/admin-user.dto';
+
+export interface PublicPlayerProfile {
+  id: number;
+  displayName: string;
+  avatarUrl: string | null;
+  qrCodeUrl: string | null;
+  winCount: number;
+  gamesPlayed: number;
+  winRate: number;
+  totalRevenue: number; // Tổng tiền thắng được (doanh thu)
+}
 
 @Injectable()
 export class UserService {
   constructor(
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async findById(id: number): Promise<UserEntity> {
@@ -45,6 +57,52 @@ export class UserService {
       qrCodeUrl: user.qrCodeUrl,
       winCount: user.winCount ?? 0,
       role: user.role,
+    };
+  }
+
+  /**
+   * Get public player profile with game statistics
+   */
+  async getPublicProfile(userId: number): Promise<PublicPlayerProfile> {
+    const user = await this.findById(userId);
+
+    // Count total games played (sessions where user purchased sheets)
+    const gamesPlayedResult = await this.dataSource.query(
+      `SELECT COUNT(DISTINCT ps.session_id) as gamesPlayed
+       FROM purchased_sheets ps
+       INNER JOIN game_sessions gs ON ps.session_id = gs.id
+       WHERE ps.user_id = ? AND gs.status = 'finished'`,
+      [userId],
+    );
+    const gamesPlayed = parseInt(gamesPlayedResult[0]?.gamesPlayed || '0', 10);
+
+    // Calculate total revenue (tiền thắng được từ các trận)
+    // Revenue = tổng tiền những người thua trả khi user thắng
+    const revenueResult = await this.dataSource.query(
+      `SELECT COALESCE(SUM(
+        (SELECT COUNT(*) FROM purchased_sheets ps2
+         WHERE ps2.session_id = gr.session_id AND ps2.user_id != gr.winner_id) * r.price_per_sheet
+      ), 0) as totalRevenue
+       FROM game_results gr
+       INNER JOIN game_sessions gs ON gr.session_id = gs.id
+       INNER JOIN rooms r ON gs.room_id = r.id
+       WHERE gr.winner_id = ? AND gs.status = 'finished'`,
+      [userId],
+    );
+    const totalRevenue = parseInt(revenueResult[0]?.totalRevenue || '0', 10);
+
+    const winCount = user.winCount ?? 0;
+    const winRate = gamesPlayed > 0 ? Math.round((winCount / gamesPlayed) * 100 * 10) / 10 : 0;
+
+    return {
+      id: user.id,
+      displayName: user.displayName || user.username,
+      avatarUrl: user.avatarUrl,
+      qrCodeUrl: user.qrCodeUrl,
+      winCount,
+      gamesPlayed,
+      winRate,
+      totalRevenue,
     };
   }
 

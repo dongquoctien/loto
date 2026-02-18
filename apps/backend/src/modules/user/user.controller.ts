@@ -46,6 +46,16 @@ export class UserController {
     return this.userService.sanitize(updated);
   }
 
+  /**
+   * GET /api/user/profile/:userId - Get public player profile with stats
+   * Accessible by any authenticated user
+   */
+  @Get('user/profile/:userId')
+  @UseGuards(JwtAuthGuard)
+  async getPublicProfile(@Param('userId', ParseIntPipe) userId: number) {
+    return this.userService.getPublicProfile(userId);
+  }
+
   // ============ ADMIN ENDPOINTS ============
 
   /**
