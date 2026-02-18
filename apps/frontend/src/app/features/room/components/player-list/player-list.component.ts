@@ -1,4 +1,4 @@
-import { Component, Input, signal, inject, OnInit, OnDestroy, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, signal, inject, OnInit, OnDestroy, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { iconoirGroup, iconoirChatBubble } from '@ng-icons/iconoir';
@@ -54,7 +54,7 @@ type TabType = 'players' | 'chat';
           <div class="players-content">
             <!-- Current user (me) at top -->
             @if (mePlayer) {
-              <div class="player-item is-me" [class.offline]="!mePlayer.isOnline">
+              <div class="player-item is-me clickable" [class.offline]="!mePlayer.isOnline" (click)="openProfile(mePlayer.userId)">
                 <div class="player-avatar me-avatar">
                   @if (mePlayer.avatarUrl) {
                     <img [src]="mePlayer.avatarUrl" [alt]="mePlayer.displayName" />
@@ -93,7 +93,7 @@ type TabType = 'players' | 'chat';
 
             <!-- Other players -->
             @for (player of otherPlayers; track player.userId) {
-              <div class="player-item" [class.offline]="!player.isOnline">
+              <div class="player-item clickable" [class.offline]="!player.isOnline" (click)="openProfile(player.userId)">
                 <div class="player-avatar">
                   @if (player.avatarUrl) {
                     <img [src]="player.avatarUrl" [alt]="player.displayName" />
@@ -136,6 +136,7 @@ type TabType = 'players' | 'chat';
         }
       </div>
     </aside>
+
   `,
   styles: [`
     :host {
@@ -255,6 +256,8 @@ type TabType = 'players' | 'chat';
       transition: background 0.15s;
     }
     .player-item:hover { background: #3A3B3C; }
+    .player-item.clickable { cursor: pointer; }
+    .player-item.clickable:active { background: #4E4F50; transform: scale(0.98); }
     .player-item.offline { opacity: 0.45; }
     .player-avatar {
       width: 34px;
@@ -450,6 +453,7 @@ export class PlayerListComponent implements OnInit, OnDestroy, OnChanges {
   @Input() kinhClaimantIds: number[] = [];
   @Input() roomStatus: 'waiting' | 'playing' = 'waiting';
   @Input() isSheetOpen = false;
+  @Output() playerClick = new EventEmitter<number>();
 
   chatService = inject(ChatService);
 
@@ -502,5 +506,9 @@ export class PlayerListComponent implements OnInit, OnDestroy, OnChanges {
     if (winCount >= 26) return '\u{26A1}';    // ⚡
     if (winCount >= 11) return '\u{1F525}';   // 🔥
     return '\u{2694}\uFE0F';                  // ⚔️
+  }
+
+  openProfile(userId: number): void {
+    this.playerClick.emit(userId);
   }
 }
