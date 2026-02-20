@@ -95,16 +95,16 @@ export interface PlayerProfile {
             </div>
           </div>
 
-          <!-- Total Revenue -->
-          <div class="revenue-section">
+          <!-- Total Revenue (Net Profit) -->
+          <div class="revenue-section" [class.negative]="profile()!.totalRevenue < 0">
             <div class="revenue-header">
               <ng-icon name="iconoirWallet" class="revenue-icon"></ng-icon>
-              <span class="revenue-title">Tổng doanh thu</span>
+              <span class="revenue-title">Lợi nhuận</span>
             </div>
             <div class="revenue-amount">
-              {{ profile()!.totalRevenue | number:'1.0-0' }}đ
+              {{ profile()!.totalRevenue >= 0 ? '+' : '' }}{{ profile()!.totalRevenue | number:'1.0-0' }}đ
             </div>
-            <span class="revenue-note">Tổng tiền thắng được từ các trận</span>
+            <span class="revenue-note">Tiền thắng - Tiền thua</span>
           </div>
 
           <!-- QR Code Section (Collapsible) -->
@@ -486,6 +486,17 @@ export interface PlayerProfile {
       color: #65676B;
       display: block;
       margin-top: 4px;
+    }
+    .revenue-section.negative {
+      background: linear-gradient(135deg, rgba(220, 53, 69, 0.08), rgba(220, 53, 69, 0.03));
+      border-color: rgba(220, 53, 69, 0.2);
+    }
+    .revenue-section.negative .revenue-icon {
+      color: #DC3545;
+    }
+    .revenue-section.negative .revenue-amount {
+      color: #DC3545;
+      text-shadow: 0 0 10px rgba(220, 53, 69, 0.3);
     }
 
     /* QR Section (Collapsible) */
