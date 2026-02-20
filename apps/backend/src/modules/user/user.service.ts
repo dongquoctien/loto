@@ -14,7 +14,7 @@ export interface PublicPlayerProfile {
   winCount: number;
   gamesPlayed: number;
   winRate: number;
-  totalRevenue: number; // Tổng tiền thắng được (doanh thu)
+  totalRevenue: number; // Lợi nhuận ròng = tiền thắng - tiền thua
 }
 
 @Injectable()
@@ -86,20 +86,37 @@ export class UserService {
     );
     const winCount = parseInt(winCountResult[0]?.winCount || '0', 10);
 
-    // Calculate total revenue (tiền thắng được từ các trận)
-    // Revenue = tổng tiền những người thua trả khi user thắng
-    const revenueResult = await this.dataSource.query(
+    // Calculate total earnings (tiền thắng được từ các trận)
+    // Earnings = tổng tiền những người thua trả khi user thắng
+    const earningsResult = await this.dataSource.query(
       `SELECT COALESCE(SUM(
         (SELECT COUNT(*) FROM purchased_sheets ps2
          WHERE ps2.session_id = gr.session_id AND ps2.user_id != gr.winner_id) * r.price_per_sheet
-      ), 0) as totalRevenue
+      ), 0) as totalEarnings
        FROM game_results gr
        INNER JOIN game_sessions gs ON gr.session_id = gs.id
        INNER JOIN rooms r ON gs.room_id = r.id
        WHERE gr.winner_id = ? AND gs.status = 'finished'`,
       [userId],
     );
-    const totalRevenue = parseInt(revenueResult[0]?.totalRevenue || '0', 10);
+    const totalEarnings = parseInt(earningsResult[0]?.totalEarnings || '0', 10);
+
+    // Calculate total spent (tiền đã mua sheet trong các trận thua)
+    // Spent = tổng tiền user đã mua sheet khi không thắng
+    // Mỗi row trong purchased_sheets = 1 sheet
+    const spentResult = await this.dataSource.query(
+      `SELECT COALESCE(SUM(r.price_per_sheet), 0) as totalSpent
+       FROM purchased_sheets ps
+       INNER JOIN game_sessions gs ON ps.session_id = gs.id
+       INNER JOIN rooms r ON gs.room_id = r.id
+       LEFT JOIN game_results gr ON gr.session_id = gs.id AND gr.winner_id = ps.user_id
+       WHERE ps.user_id = ? AND gs.status = 'finished' AND gr.id IS NULL`,
+      [userId],
+    );
+    const totalSpent = parseInt(spentResult[0]?.totalSpent || '0', 10);
+
+    // Net revenue = earnings - spent
+    const totalRevenue = totalEarnings - totalSpent;
 
     const winRate = gamesPlayed > 0 ? Math.round((winCount / gamesPlayed) * 100 * 10) / 10 : 0;
 
