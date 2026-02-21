@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, takeUntil, filter, take } from 'rxjs';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   iconoirSoundHigh,
@@ -595,6 +595,20 @@ interface SheetInfo {
             <p>Phòng này đã bị xóa hoặc không tồn tại.</p>
             <div class="leave-dialog-actions">
               <button class="btn-leave" (click)="onRoomNotFoundOk()">OK</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Room Error Popup (e.g., room closed) -->
+      @if (showRoomErrorPopup()) {
+        <div class="leave-dialog-backdrop">
+          <div class="leave-dialog">
+            <ng-icon name="iconoirWarningTriangle" class="leave-dialog-icon"></ng-icon>
+            <h3>Không Thể Vào Phòng</h3>
+            <p>{{ roomErrorMessage() }}</p>
+            <div class="leave-dialog-actions">
+              <button class="btn-leave" (click)="onRoomErrorOk()">OK</button>
             </div>
           </div>
         </div>
@@ -1373,6 +1387,10 @@ export class RoomComponent implements OnInit, OnDestroy {
   // Room not found popup state
   showRoomNotFoundPopup = signal(false);
 
+  // Generic room error popup state
+  showRoomErrorPopup = signal(false);
+  roomErrorMessage = signal('');
+
   // Player profile popup state
   selectedPlayerId = signal<number | null>(null);
 
@@ -1524,13 +1542,26 @@ export class RoomComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.socketService.connect();
-    const roomCode = this.route.snapshot.paramMap.get('code');
-    if (roomCode) {
-      this.checkAndJoinRoom(roomCode);
-    }
     this.setupSocketListeners();
 
-    // Auto-rejoin room after reconnect (fixes lost connection issues)
+    const roomCode = this.route.snapshot.paramMap.get('code');
+
+    // Wait for socket to connect before joining room (initial connection)
+    // This fixes the issue where emit('room:join') is called before socket is connected
+    if (roomCode) {
+      this.socketService.connectionState
+        .pipe(
+          filter((state) => state === 'connected'),
+          take(1), // Only handle initial connection, not reconnects
+          takeUntil(this.destroy$),
+        )
+        .subscribe(() => {
+          console.log('Socket connected — joining room:', roomCode);
+          this.checkAndJoinRoom(roomCode);
+        });
+    }
+
+    // Auto-rejoin room after reconnect (handles reconnection after disconnect)
     this.socketService.onReconnected$
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
@@ -2109,6 +2140,15 @@ export class RoomComponent implements OnInit, OnDestroy {
           return;
         }
 
+        // Handle room closed error
+        if (data.message.toLowerCase().includes('phòng đã đóng') ||
+            data.message.toLowerCase().includes('room closed') ||
+            data.message.toLowerCase().includes('closed')) {
+          this.roomErrorMessage.set('Phòng đã đóng');
+          this.showRoomErrorPopup.set(true);
+          return;
+        }
+
         // Handle password errors
         if (data.message === 'Password required' || data.message === 'Invalid password') {
           this.passwordError.set(data.message === 'Password required'
@@ -2506,6 +2546,12 @@ export class RoomComponent implements OnInit, OnDestroy {
 
   onRoomNotFoundOk() {
     this.showRoomNotFoundPopup.set(false);
+    this.router.navigate(['/lobby']);
+  }
+
+  onRoomErrorOk() {
+    this.showRoomErrorPopup.set(false);
+    this.roomErrorMessage.set('');
     this.router.navigate(['/lobby']);
   }
 
