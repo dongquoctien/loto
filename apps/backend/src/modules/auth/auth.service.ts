@@ -43,8 +43,12 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
+    // Allow login with either username or email
     const user = await this.userRepository.findOne({
-      where: { username: dto.username },
+      where: [
+        { username: dto.username },
+        { email: dto.username },
+      ],
     });
 
     if (!user) {

@@ -85,8 +85,17 @@ export class StickerService {
       }
     }
 
+    // If categoryId is being updated, clear the category relation
+    // to ensure TypeORM uses the new categoryId value
+    if (dto.categoryId !== undefined) {
+      sticker.category = null as any;
+    }
+
     Object.assign(sticker, dto);
-    return this.stickerRepository.save(sticker);
+    const saved = await this.stickerRepository.save(sticker);
+
+    // Reload with relations to return complete data
+    return this.getById(saved.id);
   }
 
   /**
